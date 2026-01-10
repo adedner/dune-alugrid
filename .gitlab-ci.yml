@@ -7,11 +7,11 @@
 variables:
   # remove some unused 3rd party packages to speed up tests.
   DUNECI_CMAKE_FLAGS: "-DCMAKE_DISABLE_FIND_PACKAGE_Alberta=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_Vc=TRUE -DCMAKE_DISABLE_DOCUMENTATION=TRUE -DENABLE_HEADERCHECK=ON"
-  
+
 before_script:
-  - duneci-install-module https://gitlab.dune-project.org/core/dune-common.git
-  - duneci-install-module https://gitlab.dune-project.org/core/dune-geometry.git
-  - duneci-install-module https://gitlab.dune-project.org/core/dune-grid.git
+  - duneci-install-module -b releases/2.11 https://gitlab.dune-project.org/core/dune-common.git
+  - duneci-install-module -b releases/2.11 https://gitlab.dune-project.org/core/dune-geometry.git
+  - duneci-install-module -b releases/2.11 https://gitlab.dune-project.org/core/dune-grid.git
 
 ubuntu:24.04-clang-18-23:
   image: registry.dune-project.org/docker/ci/ubuntu:24.04
