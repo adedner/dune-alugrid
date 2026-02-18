@@ -15,6 +15,8 @@ namespace ALUGrid
     // bzw Vierecksfl"ache sind aber auch Methoden n"otig, die eine Regel
     // mit dem Twist der Fl"ache mitdrehen, damit der "Ubergang der
     // Verfeinerung stimmt.
+    //
+    // Das ist bei Twist-freien gittern nicht mehr notwendig
 
     struct Hedge1Rule
     {
@@ -34,7 +36,7 @@ namespace ALUGrid
 
     struct Hface3Rule
     {
-      enum rule_enum { nosplit=1, e01=2, e12=3, e20=4, iso4=6, undefined=-2 };
+      enum rule_enum { nosplit=1, e01=2, e02=3, e12=4, iso4=6, undefined=-2 };
       typedef signed char rule_t;
 
       explicit Hface3Rule ( const rule_t & );
@@ -45,7 +47,7 @@ namespace ALUGrid
       inline Hface3Rule rotate (int) const ;
 
       // return true if rule is one of the bisection rules
-      bool bisection () const { return (_r >= e01) && (_r <= e20); }
+      bool bisection () const { return (_r >= e01) && (_r <= e12); }
     private :
       rule_t _r ;
     } ;
@@ -72,7 +74,7 @@ namespace ALUGrid
     struct TetraRule
     {
       enum rule_enum { crs=-1, nosplit=1,
-                       e01=2, e12=3, e20=4, e23=5, e30=6, e31=7,
+                       e01=2, e02=3, e03=4, e12=5, e13=6, e23=7,
                        regular=8, bisect=9
                      };
       typedef signed char rule_t;
@@ -85,7 +87,7 @@ namespace ALUGrid
       static inline bool isValid (const rule_t &) ;
 
       // return true if rule is one of the bisection rules
-      bool bisection () const { return (_r >= e01) && (_r <= e31); }
+      bool bisection () const { return (_r >= e01) && (_r <= e23); }
     private :
       rule_t _r ;
     } ;
@@ -167,32 +169,131 @@ namespace ALUGrid
     }
   };
 
-  inline std::ostream& operator<< (std::ostream& s, const SimplexTypeFlag& flag )
+  // Info class for isRear bool flags for faces
+  // We assume that only up to 6 bits are set.
+  // This allows the storage to be a simple char.
+  class IsRearFlag
   {
-    flag.writeAscii(s);
+    static constexpr signed char inValid      = -128 ; // only the last bis is set
+    static constexpr signed char defaultFalse = 0 ;    // all flags are false
+    static constexpr int         lastBit      = 7;     // position of the last bit
+
+    void set ( const int& position )
+    {
+      _flag |= (1 << position);
+    }
+
+    void unset ( const int& position )
+    {
+      _flag &= ~(1 << position);
+    }
+
+    bool isSet ( const int& position ) const
+    {
+      return (_flag & (1 << position));
+    }
+
+    void print( std::ostream& s ) const
+    {
+      s << "isRearFlag::_flag = " << int(_flag) << " (";
+      for( int i=0; i<8; ++i )
+        s << isSet( i ) << ",";
+      s << std::endl;
+    }
+
+  public:
+    signed char _flag;
+
+    // default constructor
+    IsRearFlag() : _flag( inValid ) {}
+
+    // default constructor
+    IsRearFlag( const IsRearFlag& other) : _flag( other._flag ) {}
+
+    // constructor for boundary segments
+    explicit IsRearFlag( const bool t0 ) : _flag( defaultFalse )
+    {
+      if( t0 ) set( 0 );
+    }
+
+    // constructor for periodic elements
+    explicit IsRearFlag( const bool t0, const bool t1 ) : _flag( defaultFalse )
+    {
+      if( t0 ) set( 0 );
+      if( t1 ) set( 1 );
+    }
+
+    // constructor for Tetras taking 4 bools
+    explicit IsRearFlag( const bool t0, const bool t1, const bool t2, const bool t3 ) : _flag( defaultFalse )
+    {
+      if( t0 ) set( 0 );
+      if( t1 ) set( 1 );
+      if( t2 ) set( 2 );
+      if( t3 ) set( 3 );
+    }
+
+    // constructor for Hexas taking 6 bools
+    explicit IsRearFlag( const bool t0, const bool t1, const bool t2,
+                         const bool t3, const bool t4, const bool t5 ) : _flag( defaultFalse )
+    {
+      if( t0 ) set( 0 );
+      if( t1 ) set( 1 );
+      if( t2 ) set( 2 );
+      if( t3 ) set( 3 );
+      if( t4 ) set( 4 );
+      if( t5 ) set( 5 );
+    }
+
+    // constructor taking std::vector with at most 6 flags
+    explicit IsRearFlag( const std::vector< bool >& flags ) : _flag( defaultFalse )
+    {
+      const int size = flags.size();
+      alugrid_assert( size < lastBit );
+      for( int i=0; i<size; ++i )
+        if( flags[ i ] ) set( i );
+    }
+
+    bool valid() const
+    {
+      // make sure that the last bit is not set, which means
+      // the _flag has not been initialized properly
+      return ! isSet( lastBit );
+    }
+
+    bool operator [] ( const int i ) const
+    {
+      alugrid_assert( valid() );
+      return isSet( i );
+    }
+
+    template <class stream>
+    void write( stream& s ) const
+    {
+      s.put( _flag );
+    }
+
+    template <class stream>
+    void read( stream& s )
+    {
+      _flag = s.get();
+    }
+  };
+
+  inline std::ostream& operator<< (std::ostream& s, const IsRearFlag& isRear )
+  {
+    // write as asciii integer number (-128,127)
+    s << int(isRear._flag);
     return s;
   }
 
-  inline std::istream& operator>> (std::istream& s, SimplexTypeFlag& flag )
+  inline std::istream& operator>> (std::istream& s, IsRearFlag& isRear )
   {
-    flag.readAscii(s);
+    // read as ascii integer number (-128,127)
+    int v; s >> v;
+    alugrid_assert( v >= -128 && v <= 127 );
+    isRear._flag = v;
     return s;
   }
-
-  template <class Traits>
-  inline BasicObjectStream< Traits >& operator<< (BasicObjectStream< Traits >& s, const SimplexTypeFlag& flag )
-  {
-    flag.write(s);
-    return s;
-  }
-
-  template <class Traits>
-  inline BasicObjectStream< Traits >& operator>> (BasicObjectStream< Traits >& s, SimplexTypeFlag& flag )
-  {
-    flag.read(s);
-    return s;
-  }
-
 
   // #     #                                    #    ######
   // #     #  ######  #####    ####   ######   ##    #     #  #    #  #       ######
@@ -276,7 +377,7 @@ namespace ALUGrid
   }
 
   inline bool RefinementRules :: Hface3Rule :: isValid (const rule_t& r) {
-    return r == nosplit || r == iso4 || r == e01 || r == e12 || r == e20 ;
+    return r == nosplit || r == iso4 || r == e01 || r == e12 || r == e02 ;
   }
 
   inline bool RefinementRules :: Hface3Rule :: isValid () const {
@@ -293,22 +394,19 @@ namespace ALUGrid
       break ;
     case e01 :
       {
-        //cout << "e01: my twist is " << t << endl;
-        static const rule_t retRule [ 6 ] = { e01, e12, e20, e01, e20, e12 }; // double checked
+        static const rule_t retRule [ 6 ] = { e01, e12, e02, e01, e02, e12 }; // double checked
         newr = retRule[ t + 3 ];
         break ;
       }
     case e12 :
       {
-        //cout << "e12: my twist is " << t << endl;
-        static const rule_t retRule [ 6 ] = { e20, e01, e12, e12, e01, e20 }; // double checked
+        static const rule_t retRule [ 6 ] = { e02, e01, e12, e12, e01, e02 }; // double checked
         newr = retRule[ t + 3 ];
         break ;
       }
-    case e20 :
+    case e02 :
       {
-        //cout << "e20: my twist is " << t << endl;
-        static const rule_t retRule [ 6 ] = { e12, e20, e01, e20, e12, e01 }; // double checked
+        static const rule_t retRule [ 6 ] = { e12, e02, e01, e02, e12, e01 }; // double checked
         newr = retRule[ t + 3 ];
         break ;
       }
@@ -331,8 +429,8 @@ namespace ALUGrid
         return out << "e01";
       case RefinementRules :: Hface3Rule :: e12:
         return out << "e12";
-      case RefinementRules :: Hface3Rule :: e20:
-        return out << "e20";
+      case RefinementRules :: Hface3Rule :: e02:
+        return out << "e02";
       case RefinementRules :: Hface3Rule :: iso4:
         return out << "iso4";
       case RefinementRules :: Hface3Rule :: undefined:
@@ -439,7 +537,7 @@ namespace ALUGrid
 
   inline bool RefinementRules :: TetraRule :: isValid (const rule_t& r) {
     return r == crs || r == nosplit || r == regular || r == bisect ||
-           r == e01 || r == e12     || r == e20  || r == e23    || r == e30 || r == e31;
+           r == e01 || r == e12     || r == e02  || r == e23    || r == e03 || r == e13;
   }
 
   inline bool RefinementRules :: TetraRule :: isValid () const {
@@ -458,14 +556,14 @@ namespace ALUGrid
         return out << "e01";
       case RefinementRules :: TetraRule :: e12:
         return out << "e12";
-      case RefinementRules :: TetraRule :: e20:
-        return out << "e20";
+      case RefinementRules :: TetraRule :: e02:
+        return out << "e02";
       case RefinementRules :: TetraRule :: e23:
         return out << "e23";
-      case RefinementRules :: TetraRule :: e30:
-        return out << "e30";
-      case RefinementRules :: TetraRule :: e31:
-        return out << "e31";
+      case RefinementRules :: TetraRule :: e03:
+        return out << "e03";
+      case RefinementRules :: TetraRule :: e13:
+        return out << "e13";
       case RefinementRules :: TetraRule :: regular:
         return out << "regular";
       case RefinementRules :: TetraRule :: bisect:

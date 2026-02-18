@@ -155,13 +155,19 @@ namespace ALUGrid
       os.readObject (v[2]);
       os.readObject (v[3]);
 
+
+      // read isRear information (see gitter_pll_impl.cc)
+      IsRearFlag isRear;
+      isRear.read( os );
+
       const signed char pointTransmitted = os.get();
 
       // the following makes only sense if information has been transmitted
       if( pointTransmitted != MacroGridMoverIF::POINTTRANSMITTED )
       {
         std::cerr << "ERROR (fatal): No point transmitted, building ghost cells impossible." << std::endl;
-        abort();
+        alugrid_assert( false );
+        std::abort();
       }
 
       // create macro ghost cell

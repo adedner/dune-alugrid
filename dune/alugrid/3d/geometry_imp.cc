@@ -7,7 +7,6 @@
 //#define COMPILE_INTO_ALUGRID_LIB 1
 
 #include "grid.hh"
-#include "mappings.hh"
 #include "geometry.hh"
 #include <dune/alugrid/common/twists.hh>
 #include <dune/common/math.hh>
@@ -72,7 +71,7 @@ integrationElement (const LocalCoordinate& local) const
     return 6.0 * geoImpl().volume();
   }
   else
-    return geoImpl().mapping().det( local );
+    return std::abs(geoImpl().mapping().det( local ));
 }
 
 template<int mydim, int cdim, class GridImp>
@@ -173,47 +172,30 @@ buildGeom(const IMPLElementType& item)
 
   if ( elementType == hexa )
   {
-    // if this assertion is thrown, use ElementTopo::dune2aluVertex instead
-    // of number when calling myvertex
-    alugrid_assert ( ElementTopo::dune2aluVertex(0) == 0 );
-    alugrid_assert ( ElementTopo::dune2aluVertex(1) == 1 );
-    alugrid_assert ( ElementTopo::dune2aluVertex(2) == 3 );
-    alugrid_assert ( ElementTopo::dune2aluVertex(3) == 2 );
-    alugrid_assert ( ElementTopo::dune2aluVertex(4) == 4 );
-    alugrid_assert ( ElementTopo::dune2aluVertex(5) == 5 );
-    alugrid_assert ( ElementTopo::dune2aluVertex(6) == 7 );
-    alugrid_assert ( ElementTopo::dune2aluVertex(7) == 6 );
 
     if( mydim == 3 ) // hexahedron
     {
       // update geo impl
       geoImpl().update( item.myvertex(0)->Point(),
                         item.myvertex(1)->Point(),
-                        item.myvertex(3)->Point(),
                         item.myvertex(2)->Point(),
+                        item.myvertex(3)->Point(),
                         item.myvertex(4)->Point(),
                         item.myvertex(5)->Point(),
-                        item.myvertex(7)->Point(),
-                        item.myvertex(6)->Point() );
+                        item.myvertex(6)->Point(),
+                        item.myvertex(7)->Point() );
     }
     else if ( mydim == 2 ) // quadrilateral
     {
       // update geo impl (drop vertex 4,5,6,7)
       geoImpl().update( item.myvertex(0)->Point(),
                         item.myvertex(1)->Point(),
-                        item.myvertex(3)->Point(),
-                        item.myvertex(2)->Point() );
+                        item.myvertex(2)->Point(),
+                        item.myvertex(3)->Point() );
     }
   }
   else if( elementType == tetra )
   {
-    // if this assertion is thrown, use ElementTopo::dune2aluVertex instead
-    // of number when calling myvertex
-    alugrid_assert ( ElementTopo::dune2aluVertex(0) == 0 );
-    alugrid_assert ( ElementTopo::dune2aluVertex(1) == 1 );
-    alugrid_assert ( ElementTopo::dune2aluVertex(2) == 2 );
-    alugrid_assert ( ElementTopo::dune2aluVertex(3) == 3 );
-
     if( mydim == 3 ) // tetrahedron
     {
       // update geo impl
@@ -244,19 +226,19 @@ buildGeom(const IMPLElementType& item)
 template <int mydim, int cdim, class GridImp>
 alu_inline bool
 ALU3dGridGeometry<mydim, cdim, GridImp >::
-buildGeom(const HFaceType & item, int t)
+buildGeom(const HFaceType & item)
 {
   // get geo face
   const GEOFaceType& face = static_cast<const GEOFaceType&> (item);
 
   const int numVertices = ElementTopo::numVerticesPerFace;
   typedef ALUTwist< numVertices, 2 > Twist;
-  const Twist twist( t );
+  const Twist twist( 0 );
 
   // for all vertices of this face get rotatedIndex
   int rotatedALUIndex[ 4 ];
   for( int i = 0; i < numVertices; ++i )
-    rotatedALUIndex[ i ] = (elementType == tetra ? twist( i ) : twist( i ) ^ (twist( i ) >> 1));
+    rotatedALUIndex[ i ] = i;
 
   if( elementType == hexa )
   {
@@ -272,8 +254,8 @@ buildGeom(const HFaceType & item, int t)
     {
       //update geometry implementation
       //we cannot use the rotatedALUIndex here, because for the codimiterator we get the wrong twist
-      geoImpl().update( face.myvertex(t < 0 ? 0 : 3)->Point(),
-                        face.myvertex(t < 0 ? 3 : 0)->Point() );
+      geoImpl().update( face.myvertex( 0 )->Point(),
+                        face.myvertex( 3 )->Point() );
     }
   }
   else if ( elementType == tetra )
@@ -367,15 +349,15 @@ buildGeom(const FaceCoordinatesType& coords)
 template <int mydim, int cdim, class GridImp> // for edges
 alu_inline bool
 ALU3dGridGeometry<mydim, cdim, GridImp >::
-buildGeom(const HEdgeType & item, int twist)
+buildGeom(const HEdgeType & item)
 {
   const GEOEdgeType & edge = static_cast<const GEOEdgeType &> (item);
 
   if (mydim == 1) // edge
   {
      // update geometry implementation
-    geoImpl().update( edge.myvertex((twist)  %2)->Point(),
-                      edge.myvertex((1+twist)%2)->Point() );
+    geoImpl().update( edge.myvertex(0)->Point(),
+                      edge.myvertex(1)->Point() );
   }
   else if ( mydim == 0) // point
   {
@@ -396,7 +378,7 @@ buildGeom(const HEdgeType & item, int twist)
 template <int mydim, int cdim, class GridImp> // for Vertices ,i.e. Points
 alu_inline bool
 ALU3dGridGeometry<mydim, cdim, GridImp >::
-buildGeom(const VertexType & item, int twist)
+buildGeom(const VertexType & item)
 {
   // update geometry implementation
   geoImpl().update( static_cast<const GEOVertexType &> (item).Point() );

@@ -15,51 +15,6 @@
 namespace ALUGrid
 {
 
-  // re-implementation of std::rotate due to compiler bug in clang
-  inline void rotateVec( int* first, int* middle, int* last)
-  {
-    int * next = middle;
-    while (first!=next)
-    {
-      std::swap (*first++,*next++);
-      if (next==last)
-        next=middle;
-      else if (first==middle)
-        middle=next;
-    }
-  }
-
-  // cyclic re-ordering of v and computing of twist
-  inline int cyclicReorder( int *begin, int *end )
-  {
-    int* middle = std::min_element( begin, end );
-
-    int twst = 0;
-    if( middle != begin )
-    {
-      rotateVec( begin, middle, end );
-      twst = end - middle;
-    }
-
-    if( *(begin + 1) < *(end - 1) )
-    {
-      return twst;
-    }
-    else
-    {
-      std::reverse( begin, end );
-      rotateVec( begin, end - 1, end );
-      return -twst - 1;
-    }
-  }
-
-  // sorts v in ascending order and returns twist
-  template <int dim>
-  inline int cyclicReorder( int (&v)[ dim ] )
-  {
-    return cyclicReorder( v, v+dim );
-  }
-
   class MacroGridBuilder
   : protected Gitter::Geometric
   {
@@ -72,8 +27,10 @@ namespace ALUGrid
       MacroGhostInfoTetra * _ptr;
       // internal face
       hface3_GEO * _first;
-      // twist of face
-      int _second;
+
+      // isRear of face
+      IsRearFlag _second;
+
       // ldb vertex index
       int _ldbVertexIndex;
       int _master;
@@ -85,14 +42,14 @@ namespace ALUGrid
       // destructor deleting _ptr if not zero
       ~Hbnd3IntStorage();
 
-      // store point and face and twist
-      Hbnd3IntStorage( hface3_GEO * f, int tw, int ldbVertexIndex, int master, const tetra_GEO * tetra, int fce);
+      // store point and face and isRear
+      Hbnd3IntStorage( hface3_GEO * f, const IsRearFlag& isRear, int ldbVertexIndex, int master, const tetra_GEO * tetra, int fce);
 
-      // store point and face and twist
-      Hbnd3IntStorage( hface3_GEO * f, int tw, int ldbVertexIndex, int master, MacroGhostInfoTetra* p);
+      // store point and face and isRear
+      Hbnd3IntStorage( hface3_GEO * f, const IsRearFlag& isRear, int ldbVertexIndex, int master, MacroGhostInfoTetra* p);
 
       // store face and twist and set point to default
-      Hbnd3IntStorage( hface3_GEO * f, int tw, int ldbVertexIndex, int master );
+      Hbnd3IntStorage( hface3_GEO * f, const IsRearFlag& isRear, int ldbVertexIndex, int master );
 
       // release internal MacroGhostInfoTetra pointer
       MacroGhostInfoTetra* release ();
@@ -101,8 +58,8 @@ namespace ALUGrid
       MacroGhostInfoTetra* ghInfo ();
 
       // this two method are just like in pair
-      hface3_GEO * first  () const { return _first;  }
-      int          second () const { return _second; }
+      hface3_GEO*       first  () const { return _first;  }
+      const IsRearFlag& second () const { return _second; }
 
       // return ldb vertex index
       int ldbVertexIndex() const { return _ldbVertexIndex; }
@@ -116,8 +73,10 @@ namespace ALUGrid
       MacroGhostInfoHexa * _ptr;
       // internal face
       hface4_GEO * _first;
-      // twist of face
-      int _second;
+
+      // isRear of face
+      IsRearFlag _second;
+
       // ldb vertex index
       int _ldbVertexIndex;
       int _master;
@@ -129,14 +88,14 @@ namespace ALUGrid
       // destructor deleting _ptr if not zero
       ~Hbnd4IntStorage ();
 
-      // store point and face and twist
-      Hbnd4IntStorage( hface4_GEO * f, int tw, int ldbVertexIndex, int master, const hexa_GEO * hexa, int fce);
+      // store point and face and isRear
+      Hbnd4IntStorage( hface4_GEO * f, const IsRearFlag& isRear, int ldbVertexIndex, int master, const hexa_GEO * hexa, int fce);
 
-      // store point and face and twist
-      Hbnd4IntStorage( hface4_GEO * f, int tw, int ldbVertexIndex, int master, MacroGhostInfoHexa* );
+      // store point and face and isRear
+      Hbnd4IntStorage( hface4_GEO * f, const IsRearFlag& isRear, int ldbVertexIndex, int master, MacroGhostInfoHexa* );
 
-      // store face and twist and set point to default
-      Hbnd4IntStorage( hface4_GEO * f, int tw, int ldbVertexIndex, int master );
+      // store face and isRear and set point to default
+      Hbnd4IntStorage( hface4_GEO * f, const IsRearFlag& isRear, int ldbVertexIndex, int master );
 
       // release internal ghost info pointer
       MacroGhostInfoHexa* ghInfo ();
@@ -145,8 +104,8 @@ namespace ALUGrid
       MacroGhostInfoHexa* release ();
 
       // this two method are just like in pair
-      hface4_GEO * first  () const { return _first;  }
-      int          second () const { return _second; }
+      hface4_GEO*       first  () const { return _first;  }
+      const IsRearFlag& second () const { return _second; }
 
       // return ldb vertex index
       int ldbVertexIndex() const { return _ldbVertexIndex; }
@@ -195,45 +154,65 @@ namespace ALUGrid
       virtual std::pair< hface3_GEO *, bool >    InsertUniqueHface (int (&)[3]);
       virtual std::pair< hface4_GEO *, bool >    InsertUniqueHface (int (&)[4]);
 
-      virtual std::pair< tetra_GEO *, bool >     InsertUniqueTetra (int (&v)[4] ) { return InsertUniqueTetra( v, SimplexTypeFlag(0,0) ); }
-      virtual std::pair< tetra_GEO *, bool >     InsertUniqueTetra (int (&)[4], SimplexTypeFlag );
-      virtual std::pair< hexa_GEO *, bool >      InsertUniqueHexa (int (&)[8]);
+      virtual std::pair< tetra_GEO *, bool >     InsertUniqueTetra (int (&v)[4], const IsRearFlag &isRear) { return InsertUniqueTetra( v, isRear, SimplexTypeFlag(0,0) ); }
+      virtual std::pair< tetra_GEO *, bool >     InsertUniqueTetra (int (&v)[4], const IsRearFlag &isRear, SimplexTypeFlag simplexType );
 
-      virtual std::pair< periodic3_GEO *, bool > InsertUniquePeriodic (int (&)[6], const Gitter::hbndseg::bnd_t (&)[2]);
-      virtual std::pair< periodic4_GEO *, bool > InsertUniquePeriodic (int (&)[8], const Gitter::hbndseg::bnd_t (&)[2]);
-      virtual std::pair< periodic3_GEO *, bool >
-      InsertUniquePeriodic3 (int (&v)[6], const Gitter::hbndseg::bnd_t (&bnd)[2]) { return InsertUniquePeriodic( v, bnd ); }
-      virtual std::pair< periodic4_GEO *, bool >
-      InsertUniquePeriodic4 (int (&v)[8], const Gitter::hbndseg::bnd_t (&bnd)[2]) { return InsertUniquePeriodic( v, bnd ); }
+      virtual std::pair< hexa_GEO *, bool >      InsertUniqueHexa (int (&)[8], const IsRearFlag& isRear);
 
-      // old version setting default boundary ids
-      std::pair< periodic3_GEO *, bool > InsertUniquePeriodic3 (int (&v)[6] )
+      virtual std::pair< periodic3_GEO *, bool > InsertUniquePeriodic (int (&)[6], const IsRearFlag&, const Gitter::hbndseg::bnd_t (&)[2]);
+      virtual std::pair< periodic4_GEO *, bool > InsertUniquePeriodic (int (&)[8], const IsRearFlag&, const Gitter::hbndseg::bnd_t (&)[2]);
+
+      // tetra version of InsertUniquePeriodic
+      std::pair< periodic3_GEO *, bool > InsertUniquePeriodic (int (&v)[6], const Gitter::hbndseg::bnd_t (&bnd)[2])
       {
-        Gitter::hbndseg::bnd_t bnd[ 2 ] =
-          { Gitter::hbndseg::periodic, Gitter::hbndseg::periodic };
-        return InsertUniquePeriodic( v, bnd );
+        // invalid flag means isRear is searched for which
+        // requires that the face has already one attached element
+        IsRearFlag isRear;
+        return InsertUniquePeriodic( v, isRear, bnd );
       }
 
-      // old version setting default boundary ids
-      std::pair< periodic4_GEO *, bool > InsertUniquePeriodic4 (int (&v)[8] )
+      // hexa version of InsertUniquePeriodic
+      std::pair< periodic4_GEO *, bool > InsertUniquePeriodic (int (&v)[8], const Gitter::hbndseg::bnd_t (&bnd)[2])
       {
-        Gitter::hbndseg::bnd_t bnd[ 2 ] =
-          { Gitter::hbndseg::periodic, Gitter::hbndseg::periodic };
-        return InsertUniquePeriodic( v, bnd );
+        // invalid flag means isRear is searched for which
+        // requires that the face has already one attached element
+        IsRearFlag isRear;
+        return InsertUniquePeriodic( v, isRear, bnd );
       }
 
-      virtual bool InsertUniqueHbnd3 (int (&)[3], Gitter::hbndseg::bnd_t, int,int, const ProjectVertexPtr& pv);
-      virtual bool InsertUniqueHbnd4 (int (&)[4], Gitter::hbndseg::bnd_t, int,int, const ProjectVertexPtr& pv);
+      virtual bool InsertUniqueHbnd3 (int (&)[3], const IsRearFlag& isRear, Gitter::hbndseg::bnd_t, int ldbIdx, int master, const ProjectVertexPtr& pv);
+      virtual bool InsertUniqueHbnd4 (int (&)[4], const IsRearFlag& isRear, Gitter::hbndseg::bnd_t, int ldbIdx, int master, const ProjectVertexPtr& pv);
 
-      virtual bool InsertUniqueHbnd3 (int (&v)[3], Gitter::hbndseg::bnd_t bt, const ProjectVertexPtr& pv )
+      virtual bool InsertUniqueHbnd3 (int (&v)[3], const IsRearFlag& isRear, Gitter::hbndseg::bnd_t bt, const ProjectVertexPtr& pv )
       {
-        // ldbVertexIndex = -1
-        return InsertUniqueHbnd3( v, bt, int(-1), int(-1), pv );
+        // ldbVertexIndex = -1, master = -1
+        return InsertUniqueHbnd3( v, isRear, bt, int(-1), int(-1), pv );
       }
-      virtual bool InsertUniqueHbnd4 (int (&v)[4], Gitter::hbndseg::bnd_t bt, const ProjectVertexPtr& pv )
+
+      // InsertUniqueHbnd for tetra elements
+      virtual bool InsertUniqueHbnd (int (&v)[3], Gitter::hbndseg::bnd_t bt, const ProjectVertexPtr& pv )
       {
-        // ldbVertexIndex = -1
-        return InsertUniqueHbnd4( v, bt, int(-1), int(-1), pv );
+        // ldbVertexIndex = -1, master = -1
+        // invalid flag means isRear is searched for which
+        // requires that the face has already one attached element
+        IsRearFlag isRear;
+        return InsertUniqueHbnd3( v, isRear, bt, int(-1), int(-1), pv );
+      }
+
+      virtual bool InsertUniqueHbnd4 (int (&v)[4], const IsRearFlag& isRear, Gitter::hbndseg::bnd_t bt, const ProjectVertexPtr& pv )
+      {
+        // ldbVertexIndex = -1, master = -1
+        return InsertUniqueHbnd4( v, isRear, bt, int(-1), int(-1), pv );
+      }
+
+      // InsertUniqueHbnd for hexa elements
+      virtual bool InsertUniqueHbnd (int (&v)[4], Gitter::hbndseg::bnd_t bt, const ProjectVertexPtr& pv )
+      {
+        // ldbVertexIndex = -1, master = -1
+        // invalid flag means isRear is searched for which
+        // requires that the face has already one attached element
+        IsRearFlag isRear;
+        return InsertUniqueHbnd4( v, isRear, bt, int(-1), int(-1), pv );
       }
 
     public :
@@ -318,24 +297,24 @@ namespace ALUGrid
 
   //- Hbnd3IntStorage
   inline MacroGridBuilder::Hbnd3IntStorage::
-  Hbnd3IntStorage( hface3_GEO * f, int tw, int ldbVertexIndex, int master, const tetra_GEO * tetra, int fce)
+  Hbnd3IntStorage( hface3_GEO * f, const IsRearFlag& isRear, int ldbVertexIndex, int master, const tetra_GEO * tetra, int fce)
    : _ptr(new MacroGhostInfoTetra(tetra,fce))
-   , _first(f) , _second(tw), _ldbVertexIndex( ldbVertexIndex ), _master(master)
+   , _first(f) , _second(isRear), _ldbVertexIndex( ldbVertexIndex ), _master(master)
   {
     alugrid_assert ( _ldbVertexIndex >= 0 );
   }
 
   inline MacroGridBuilder::Hbnd3IntStorage::
-  Hbnd3IntStorage( hface3_GEO * f, int tw, int ldbVertexIndex, int master, MacroGhostInfoTetra *p)
-   : _ptr(p) , _first(f) , _second(tw), _ldbVertexIndex( ldbVertexIndex ), _master(master)
+  Hbnd3IntStorage( hface3_GEO * f, const IsRearFlag& isRear, int ldbVertexIndex, int master, MacroGhostInfoTetra *p)
+   : _ptr(p) , _first(f) , _second(isRear), _ldbVertexIndex( ldbVertexIndex ), _master(master)
   {
     alugrid_assert ( _ldbVertexIndex >= 0 );
     alugrid_assert ( _ptr );
   }
 
   inline MacroGridBuilder::Hbnd3IntStorage::
-  Hbnd3IntStorage( hface3_GEO * f, int tw, int ldbVertexIndex, int master )
-   : _ptr(0), _first(f) , _second(tw), _ldbVertexIndex( ldbVertexIndex ), _master(master)
+  Hbnd3IntStorage( hface3_GEO * f, const IsRearFlag& isRear, int ldbVertexIndex, int master )
+   : _ptr(nullptr), _first(f) , _second(isRear), _ldbVertexIndex( ldbVertexIndex ), _master(master)
   {
     // for this constructor we need to allow ldbVertexIndex < 0
     // since this can happen on parallel construction via several macro files.
@@ -347,7 +326,7 @@ namespace ALUGrid
     if( _ptr )
     {
       delete _ptr;
-      _ptr = 0;
+      _ptr = nullptr;
     }
   }
 
@@ -359,30 +338,30 @@ namespace ALUGrid
   inline MacroGhostInfoTetra* MacroGridBuilder::Hbnd3IntStorage::release ()
   {
     MacroGhostInfoTetra* p = _ptr;
-    _ptr = 0;
+    _ptr = nullptr;
     return p;
   }
 
   //- Hbnd4IntStorage
   inline MacroGridBuilder::Hbnd4IntStorage::
-  Hbnd4IntStorage( hface4_GEO * f, int tw, int ldbVertexIndex, int master, const hexa_GEO * hexa, int fce)
-   : _ptr( new MacroGhostInfoHexa(hexa,fce) ), _first(f) , _second(tw), _ldbVertexIndex( ldbVertexIndex ), _master(master)
+  Hbnd4IntStorage( hface4_GEO * f, const IsRearFlag& isRear, int ldbVertexIndex, int master, const hexa_GEO * hexa, int fce)
+   : _ptr( new MacroGhostInfoHexa(hexa,fce) ), _first(f) , _second(isRear), _ldbVertexIndex( ldbVertexIndex ), _master(master)
   {
     alugrid_assert ( _ldbVertexIndex >= 0 );
   }
 
   // hface4 storage
   inline MacroGridBuilder::Hbnd4IntStorage::
-  Hbnd4IntStorage( hface4_GEO * f, int tw, int ldbVertexIndex, int master, MacroGhostInfoHexa* p)
-   : _ptr(p) , _first(f) , _second(tw), _ldbVertexIndex( ldbVertexIndex ), _master(master)
+  Hbnd4IntStorage( hface4_GEO * f, const IsRearFlag& isRear, int ldbVertexIndex, int master, MacroGhostInfoHexa* p)
+   : _ptr(p) , _first(f) , _second(isRear), _ldbVertexIndex( ldbVertexIndex ), _master(master)
   {
     alugrid_assert ( _ldbVertexIndex >= 0 );
     alugrid_assert ( _ptr );
   }
 
   inline MacroGridBuilder::Hbnd4IntStorage::
-  Hbnd4IntStorage( hface4_GEO * f, int tw, int ldbVertexIndex, int master )
-   : _ptr(0) , _first(f) , _second(tw), _ldbVertexIndex( ldbVertexIndex ), _master(master)
+  Hbnd4IntStorage( hface4_GEO * f, const IsRearFlag& isRear, int ldbVertexIndex, int master )
+   : _ptr(nullptr) , _first(f) , _second(isRear), _ldbVertexIndex( ldbVertexIndex ), _master(master)
   {
     // for this constructor we need to allow ldbVertexIndex < 0
     // since this can happen on parallel construction via several macro files.
@@ -394,7 +373,7 @@ namespace ALUGrid
     if( _ptr )
     {
       delete _ptr;
-      _ptr = 0;
+      _ptr = nullptr;
     }
   }
 
@@ -406,7 +385,7 @@ namespace ALUGrid
   inline MacroGhostInfoHexa* MacroGridBuilder::Hbnd4IntStorage::release()
   {
     MacroGhostInfoHexa* p = _ptr;
-    _ptr = 0;
+    _ptr = nullptr;
     return p;
   }
 

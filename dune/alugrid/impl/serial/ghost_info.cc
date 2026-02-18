@@ -24,6 +24,9 @@ namespace ALUGrid
       os.write( _p[i][1] );
       os.write( _p[i][2] );
     }
+
+    // write isRear info for faces
+    _isRear.write( os );
   }
 
   template<int points>
@@ -61,6 +64,8 @@ namespace ALUGrid
       os.read(pr[2]);
     }
 
+    _isRear.read( os );
+
     alugrid_assert ( _fce != invalidFace );
   }
 
@@ -80,10 +85,13 @@ namespace ALUGrid
       this->_p[vx][2] = p[2];
     }
 
-    for(int i=0; i<noVx; i++)
+    for(int i=0; i<noVx; ++i)
     {
       this->_vx[i] = hexa->myvertex(i)->ident();
     }
+
+    this->_isRear = hexa->isRearFlag();
+
     this->_fce = fce;
   }
 
@@ -113,26 +121,32 @@ namespace ALUGrid
       os.writeObject ( p[1] );
       os.writeObject ( p[2] );
     }
+
+    // write isRear info for all faces
+    hexa.isRearFlag().write( os );
   }
 
 
   MacroGhostInfoTetra::MacroGhostInfoTetra ( const Gitter::Geometric::tetra_GEO *tetra, const int fce )
   {
     _simplexTypeFlag = tetra->simplexTypeFlag();
-    alugrid_assert ( points == this->nop() );
-    const Gitter::Geometric::VertexGeo * vertex = tetra->myvertex( fce );
-    alugrid_assert ( vertex );
-    for(int vx=0; vx<points; ++vx)
+    alugrid_assert ( points == 1 );
+    // get vertex opposite to face
     {
-      this->_vxface[vx] = vertex->ident();
+      const int oppositeVertex = Gitter::Geometric::tetra_GEO::oppositeVertex[fce];
+      const Gitter::Geometric::VertexGeo * vertex = tetra->myvertex( oppositeVertex );
+      alugrid_assert ( vertex );
+      this->_vxface[ 0 ] = vertex->ident();
       const alucoord_t (&p) [3] = vertex->Point();
-      this->_p[vx][0] = p[0];
-      this->_p[vx][1] = p[1];
-      this->_p[vx][2] = p[2];
+      this->_p[0][0] = p[0];
+      this->_p[0][1] = p[1];
+      this->_p[0][2] = p[2];
     }
 
     for( int i = 0; i < noVx; ++i )
       this->_vx[i] = tetra->myvertex(i)->ident();
+
+    this->_isRear = tetra->isRearFlag();
 
     this->_fce = tetra->simplexTypeFlag().orientation() ? -fce-1 : fce;
   }
@@ -154,7 +168,8 @@ namespace ALUGrid
     }
 
     {
-      const Gitter::Geometric::VertexGeo * vertex = tetra.myvertex(fce);
+      const int oppositeVertex = Gitter::Geometric::tetra_GEO::oppositeVertex[fce];
+      const Gitter::Geometric::VertexGeo * vertex = tetra.myvertex( oppositeVertex );
       alugrid_assert ( vertex );
 
       // know identifier of transmitted point
@@ -163,10 +178,13 @@ namespace ALUGrid
 
       // store the missing point to form a tetra
       const alucoord_t (&p)[3] = vertex->Point();
-      os.writeObject ( p[0] );
-      os.writeObject ( p[1] );
-      os.writeObject ( p[2] );
+      os.write( p[0] );
+      os.write( p[1] );
+      os.write( p[2] );
     }
+
+    // write isRear information of faces
+    tetra.isRearFlag().write( os );
 
     // write simplex type flag
     tetra.simplexTypeFlag().write( os );

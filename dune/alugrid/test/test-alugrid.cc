@@ -113,7 +113,7 @@ struct SimplePartition
   {
     const int id = macroView_.macroId( element );
     // return rank destination number
-    return 0;///id % grid_.comm().size();
+    return id % grid_.comm().size();
   }
 
   // recompute imported ranks
@@ -183,122 +183,6 @@ void checkIteratorAssignment(GridType & grid)
   }
 }
 
-
-template <class EntityType, class LocalGeometryType>
-int aluTwistCheck(const EntityType& en, const LocalGeometryType& localGeom,
-                  const int face, const bool neighbor, const bool output )
-{
-  enum { dim = EntityType :: dimension };
-  typedef typename EntityType :: Geometry :: ctype ctype;
-
-  typedef Dune::FaceTopologyMapping< Dune::tetra > SimplexFaceMapping;
-  typedef Dune::FaceTopologyMapping< Dune::hexa > CubeFaceMapping;
-
-  // get reference element
-  const auto& refElem = Dune::ReferenceElements< ctype, dim >::general( en.type() );
-
-  const int vxSize = refElem.size( face, 1, dim );
-  typedef Dune::FieldVector< ctype, dim > CoordinateVectorType;
-
-  // now calculate twist by trial and error for all possible twists
-  // the calculated twist is with respect to the ALUGrid
-  // reference face, see twistprovider.cc
-  int twistFound = -66;
-  for(int twist = -vxSize; twist<vxSize; ++twist)
-  {
-    bool twistOk = true;
-    // now check mapping with twist
-    for(int i=0; i<vxSize; ++i)
-    {
-      int twistedDuneIndex = -1;
-      if( localGeom.type().isCube() )
-      {
-        twistedDuneIndex = CubeFaceMapping::twistedDuneIndex( i, twist );
-      }
-      else
-      {
-        twistedDuneIndex = SimplexFaceMapping::twistedDuneIndex( i, twist );
-      }
-
-      // get face vertices of number in self face
-      int vxIdx = refElem.subEntity( face, 1 , twistedDuneIndex , dim);
-
-      // get position in reference element of vertex i
-      CoordinateVectorType refPos = refElem.position( vxIdx, dim );
-
-      // check coordinates again
-      CoordinateVectorType localPos = localGeom.corner( i );
-      if( (refPos - localPos).infinity_norm() > 1e-8 )
-      {
-        twistOk = false;
-        break;
-      }
-    }
-
-    if( twistOk )
-    {
-      twistFound = twist;
-      break ;
-    }
-  }
-
-  // if no twist found, then something is wrong
-  if( twistFound == -66 )
-  {
-    assert (false);
-    DUNE_THROW( Dune::GridError, "Not matching twist found" );
-  }
-
-  if( output )
-  {
-    std::string twistIn( (neighbor) ? "twistInOutside()" : "twistInInside()" );
-    std::string numberIn( (neighbor) ? "indexInOutside()" : "indexInInside()" );
-    std::cout << "ERROR: Face "<< face << " : twist = "<< twistFound << std::endl;
-    std::cout << "\nPut twist = "<< twistFound << " In TwistUtility::"<< twistIn << " for " << numberIn << " = " << face << " ! \n";
-    std::cout << "******************************************\n";
-  }
-
-  return twistFound;
-}
-
-template <class GridView>
-void checkALUTwists( const GridView& gridView, const bool verbose = false )
-{
-
-  typedef typename GridView :: template Codim< 0 > :: Iterator Iterator ;
-  typedef typename Iterator :: Entity Entity ;
-  typedef typename GridView :: IntersectionIterator IntersectionIterator ;
-
-  const Iterator endit = gridView.template end< 0 >();
-  for( Iterator it = gridView.template begin< 0 >(); it != endit ; ++it )
-  {
-    const Entity& entity = *it ;
-    const IntersectionIterator endnit = gridView.iend( entity );
-    for( IntersectionIterator nit = gridView.ibegin( entity ); nit != endnit; ++nit )
-    {
-      typedef typename IntersectionIterator :: Intersection  Intersection;
-      const Intersection& intersection = * nit ;
-
-      // check twist of inside geometry
-      const int twistInside = aluTwistCheck( entity, intersection.geometryInInside(),
-                                             intersection.indexInInside(), false, verbose );
-      const int twistIn = intersection.impl().twistInInside();
-
-      if( twistInside != twistIn )
-        std::cerr << "Error: inside twists " << twistInside << " (found)  and  " << twistIn << " (given) differ" << std::endl;
-
-      if( intersection.neighbor() )
-      {
-        // check twist of inside geometry
-        const int twistOutside = aluTwistCheck( intersection.outside(), intersection.geometryInOutside(),
-                                                intersection.indexInOutside(), true, verbose );
-        const int twistOut = intersection.impl().twistInOutside();
-        if( twistOutside != twistOut )
-          std::cerr << "Error: outside twists " << twistOutside << " (found)  and  " << twistOut << " (given) differ" << std::endl;
-      }
-    }
-  }
-}
 
 template <int codim, class GridView>
 void checkIteratorCodim(const GridView & gridView)
@@ -497,9 +381,10 @@ void checkALUSerial(GridType & grid, int mxl = 2)
 {
   const bool skipLevelIntersections = grid.conformingRefinement();//! EnableLevelIntersectionIteratorCheck< GridType > :: v ;
   {
-    GridType* gr = new GridType();
+    std::cout << "  CHECKING: create and destroy empty grid next to existing grid " << std::endl<<std::endl;
+    std::unique_ptr< GridType > gr( new GridType() );
     assert ( gr );
-    delete gr;
+    gr.reset();
   }
 
   writeFile( grid.leafGridView() );
@@ -516,18 +401,7 @@ void checkALUSerial(GridType & grid, int mxl = 2)
   out << "  CHECKING: Macro-intersections" << std::endl;
   checkIntersectionIterator(grid, skipLevelIntersections);
 
-  if( GridType :: dimension == 3 )
-  {
-    // this only works for ALUGrid 3d
-    out << "  CHECKING: 3d Twists " << std::endl;
-    checkALUTwists( grid.leafGridView() );
-  }
-
-  // only check twists for simplex grids
-  // const bool checkTwist = grid.geomTypes(0)[0].isSimplex();
-
-  //if( checkTwist )
-  //  checkTwists( grid.leafGridView(), NoMapTwist() );
+  std::cout << "  CHECKING: Macro-twists " << std::endl;
 
   for(int i=0; i<mxl; i++)
   {
@@ -536,12 +410,11 @@ void checkALUSerial(GridType & grid, int mxl = 2)
     checkGrid(grid);
     out << "  CHECKING: intersections" << std::endl;
     checkIntersectionIterator(grid, skipLevelIntersections);
-    // if( checkTwist )
-    //  checkTwists( grid.leafGridView(), NoMapTwist() );
   }
 
   writeFile( grid.leafGridView(), 1 );
 
+  std::cout << " Making Non-Conform " << std::endl;
   // check also non-conform grids
   makeNonConfGrid(grid,0,1);
 
@@ -552,9 +425,6 @@ void checkALUSerial(GridType & grid, int mxl = 2)
 
   out << "  CHECKING: non-conform" << std::endl;
   checkGrid(grid);
-  out << "  CHECKING: twists " << std::endl;
-  // if( checkTwist )
-  //  checkTwists( grid.leafGridView(), NoMapTwist() );
 
   // check the method geometryInFather()
   if( GridType::dimension == GridType::dimensionworld )
@@ -632,7 +502,7 @@ int main (int argc , char **argv) {
     }
     else
     {
-      std::cout << "usage:" << argv[0] << " <2d|2dsimp|2dcube|2dconf|3d|3dsimp|3dconf|3dcube|3dperiodic>" << std::endl;
+      std::cout << "usage:" << argv[0] << " <2d|2dsimp|2dcube|2dconf|2dperiodic|3d|3dsimp|3dconf|3dcube|3dperiodic>" << std::endl;
     }
 
     const char *newfilename = 0;
@@ -643,15 +513,18 @@ int main (int argc , char **argv) {
     bool testALU2dSimplex = initialize ;
     bool testALU2dConform = initialize ;
     bool testALU2dCube    = initialize ;
+    bool testALU2dPeriodic    = initialize ;
     if( key == "2d" )
     {
       testALU2dSimplex = true ;
       testALU2dConform = true ;
       testALU2dCube   = true ;
+      testALU2dPeriodic   = true ;
     }
     if( key == "2dsimp" ) testALU2dSimplex = true ;
     if( key == "2dconf" ) testALU2dConform = true ;
     if( key == "2dcube" ) testALU2dCube    = true ;
+    if( key == "2dperiodic" ) testALU2dPeriodic    = true ;
 #endif // #ifndef NO_2D
 
 #ifndef NO_3D
@@ -686,8 +559,12 @@ int main (int argc , char **argv) {
       // check empty grids
 
 #ifndef NO_3D
-      if (myrank == 0 && (testALU3dCube || testALU3dSimplex) )
-        std::cout << "Check empty grids" << std::endl;
+      if (myrank == 0 && (testALU3dCube || testALU3dSimplex || testALU3dConform) )
+      {
+        std::cout << "**************************************************" << std::endl;
+        std::cout << "***    Checking empty grids..." << std::endl;
+        std::cout << "**************************************************" << std::endl << std::endl;
+      }
 
       if( testALU3dCube )
       {
@@ -714,7 +591,11 @@ int main (int argc , char **argv) {
       // check grid factory (test only available for dune-grid 3.0 or later)
 
       if( myrank == 0 )
-        std::cout << "Checking grid factory..." << std::endl;
+      {
+        std::cout << "**************************************************" << std::endl;
+        std::cout << "***    Checking grid factory..." << std::endl;
+        std::cout << "**************************************************" << std::endl << std::endl;
+      }
 
 #if HAVE_DUNE_GRID_TESTGRIDS
 #ifndef NO_2D
@@ -749,6 +630,14 @@ int main (int argc , char **argv) {
 #endif // HAVE_DUNE_GRID_TESTGRIDS
 
 #ifndef NO_2D
+
+      if( myrank == 0 )
+      {
+        std::cout << "**************************************************" << std::endl;
+        std::cout << "***    Checking grid from dgf files..." << std::endl;
+        std::cout << "**************************************************" << std::endl << std::endl;
+      }
+
       // check non-conform ALUGrid for 2d
       if( testALU2dCube )
       {
@@ -758,6 +647,7 @@ int main (int argc , char **argv) {
           filename = newfilename;
         else
           filename = "./dgf/cube-testgrid-2-2.dgf";
+          //filename = "./dgf/reference-cube-2-2.dgf";
         std::cout << "READING from " << filename << std::endl;
         Dune::GridPtr< GridType > gridPtr( filename );
         gridPtr.loadBalance();
@@ -804,6 +694,7 @@ int main (int argc , char **argv) {
           filename = newfilename;
         else
           filename = "./dgf/simplex-testgrid-2-2.dgf";
+          //filename = "./dgf/reference-simplex-2-2.dgf";
         std::cout << "READING from " << filename << std::endl;
         Dune::GridPtr< GridType > gridPtr( filename );
         gridPtr.loadBalance();
@@ -854,6 +745,7 @@ int main (int argc , char **argv) {
           filename = newfilename;
         else
           filename = "./dgf/simplex-testgrid-2-2.dgf";
+          //filename = "./dgf/reference-simplex-2-2.dgf";
         Dune::GridPtr<GridType> gridPtr( filename );
         gridPtr.loadBalance();
         GridType & grid = *gridPtr;
@@ -891,6 +783,29 @@ int main (int argc , char **argv) {
 
         conforming = 0;
       }
+
+      if( testALU2dPeriodic )
+      {
+        // check periodic capabilities
+        std::string filename;
+        if( newfilename )
+          filename = newfilename;
+        else
+          filename = "./dgf/periodic-2d.dgf";
+        typedef Dune::ALUGrid< 2, 2, Dune::simplex, Dune::conforming > GridType;
+        // periodic boundaries require certain load balancing methods
+        GridType::setLoadBalanceMethod( 10 );
+        Dune::GridPtr< GridType > gridPtr( filename );
+        gridPtr.loadBalance();
+        GridType & grid = *gridPtr;
+
+        {
+          std::cout << "Check periodic grid" << std::endl;
+          checkALUSerial(grid,
+                         (mysize == 1) ? 1 : 0 );
+          checkForPeriodicBoundaries( grid );
+        }
+      }
 #endif // #ifndef NO_2D
 
 #ifndef NO_3D
@@ -901,6 +816,7 @@ int main (int argc , char **argv) {
           filename = newfilename;
         else
           filename = "./dgf/simplex-testgrid-3-3.dgf";
+          //filename = "./dgf/reference-cube-3-3.dgf";
 
         typedef Dune::ALUGrid< 3, 3, Dune::cube > GridType;
         {
@@ -934,7 +850,10 @@ int main (int argc , char **argv) {
         if( newfilename )
           filename = newfilename;
         else
-          filename = "./dgf/periodic3.dgf";
+          filename = "./dgf/periodic-3d.dgf";
+
+        //typedef Dune::ALUGrid< 3, 3, Dune::cube, Dune::nonconforming > GridType;
+        filename = "./dgf/periodic3.dgf";
         typedef Dune::ALUGrid< 3, 3, Dune::cube > GridType;
         // periodic boundaries require certain load balancing methods
         GridType::setLoadBalanceMethod( 10 );
@@ -957,6 +876,7 @@ int main (int argc , char **argv) {
           filename = newfilename;
         else
           filename = "./dgf/simplex-testgrid-3-3.dgf";
+          //filename = "./dgf/reference-simplex-3-3.dgf";
 
         typedef Dune::ALUGrid< 3, 3, Dune::simplex > GridType;
         Dune::GridPtr< GridType > gridPtr( filename );
@@ -988,7 +908,8 @@ int main (int argc , char **argv) {
         if( newfilename )
           filename = newfilename;
         else
-          filename = "./dgf/simplex-testgrid-3-3.dgf";
+          //filename = "./dgf/simplex-testgrid-3-3.dgf";
+          filename = "./dgf/reference-simplex-3-3.dgf";
 
         typedef Dune::ALUGrid< 3, 3, Dune::simplex > GridType;
         Dune::GridPtr< GridType > gridPtr( filename );

@@ -16,6 +16,10 @@ namespace Dune
 
   namespace Capabilities
   {
+    // forward declaration in until decision in dune-grid was made.
+    template<class Grid>
+    struct isTwistFree;
+
 
     // Capabilities for ALUGrid
     // ------------------------
@@ -29,6 +33,16 @@ namespace Dune
       static const bool v = true;
       static const unsigned int topologyId = (eltype == cube) ?
         GeometryTypes::cube(dim).id() : GeometryTypes::simplex(dim).id();
+    };
+
+
+    /** \brief ALUGrid is a twist free grid
+    \ingroup ALUGrid
+    */
+    template< int dim, int dimworld, ALUGridElementType eltype, ALUGridRefinementType refinementtype, class Comm >
+    struct isTwistFree< ALUGrid< dim, dimworld, eltype, refinementtype, Comm > >
+    {
+      static const bool v = true;
     };
 
     /** \brief ALUGrid has entities for all codimension

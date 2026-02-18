@@ -1,7 +1,7 @@
 // (c) Robert Kloefkorn 2010
 #include <config.h>
 
-#include "mapp_tetra_3d.h"
+#include "mappings.hh"
 #include "gitter_tetra_top.h"
 #include "gitter_impl.h"
 
@@ -34,65 +34,12 @@ namespace ALUGrid
     return vx ;
   }
 
-  template< class A > typename Hface3Top < A >::edgepair_t
-  Hface3Top < A >::subEdges( myhedge_t* edge, const myvertex_t* vx0, const myvertex_t* vx1 )
-  {
-    alugrid_assert ( vx0 );
-    alugrid_assert ( vx1 );
-
-    // get sub faces
-    myhedge_t* subEdge[ 2 ] = { edge->subedge( 0 ), edge->subedge( 1 ) };
-
-    // check face order with vertex0
-    int sub0 = 1 ;
-    for( int i=0; i<2; ++i )
-    {
-      if( subEdge[ 0 ]->myvertex( i ) == vx0 )
-      {
-        sub0 = 0;
-        break;
-      }
-    }
-
-#ifdef ALUGRIDDEBUG
-    // make sure the vertex is on the other face
-    bool found0 = false ;
-    bool found1 = false ;
-    // check face order with vertex0
-    for( int i=0; i<2; ++i )
-    {
-      if( subEdge[ sub0 ]->myvertex( i ) == vx0 )
-      {
-        found0 = true ;
-      }
-      if( subEdge[ ! sub0 ]->myvertex( i ) == vx1 )
-      {
-        found1 = true ;
-      }
-    }
-
-    if( ! found0 || ! found1 )
-    {
-      std::cout << "Problem: " << edge << std::endl;
-      std::cout << " vx0 " << vx0 << std::endl;
-      std::cout << " vx1 " << vx1 << std::endl;
-      std::cout << "sub0 " << subEdge[ sub0 ] << std::endl;
-      std::cout << "sub1 " << subEdge[ ! sub0 ] << std::endl;
-    }
-
-    alugrid_assert ( found0 );
-    alugrid_assert ( found1 );
-
-#endif
-    return edgepair_t( subEdge[ sub0 ], subEdge[ ! sub0 ] );
-  }
 
 
   template< class A > void Hface3Top < A >::split_e01 ()
   {
     // NOTE: edge numbering is not opposite vertex !!!
     // see gitter_geo.cc
-    // the new edge needs to be in the middle (meaning edge 1 out of {0,1,2})
 
     /*
                       2
@@ -101,8 +48,8 @@ namespace ALUGrid
                    /  *  \
                   /       \
                  /    *    \
-             2  /           \ 1
-               /2    1*2    1\
+             1  /           \ 2
+               /1    2*1    2\
               /               \
              /        *        \
             /                   \
@@ -112,28 +59,27 @@ namespace ALUGrid
         0            0               1
       */
 
+    alugrid_assert ( !(this->is2d()) );
     alugrid_assert ( _inner == 0 );
     const int newLevel = 1 + level () ;
     myhedge_t* splitEdge = myhedge(0);
 
     myvertex_t * ev0 = splitEdge->subvertex (0) ;
-    myvertex_t * vx2 = vertexNotOnSplitEdge( 0 );
 
-    edgepair_t subEdge = subEdges( splitEdge, myvertex(0), myvertex(1) );
-    //myvertex_t * vx2 = myvertex( 2 );
+    myvertex_t * vx2 = myvertex( 2 );
     alugrid_assert (ev0) ;
     inneredge_t * e0 = new inneredge_t (newLevel, ev0, vx2 ) ;
     alugrid_assert ( e0 ) ;
     innerface_t * f0 = new innerface_t (newLevel,
-                                        subEdge.first, twist(0),
-                                        e0, 0,
-                                        myhedge(2), twist(2),
+                                        splitEdge->subedge(0),
+                                        myhedge(1),
+                                        e0,
                                         0) ; // child number
 
     innerface_t * f1 = new innerface_t (newLevel,
-                                        subEdge.second, twist(0),
-                                        myhedge(1), twist(1),
-                                        e0, 1,
+                                        splitEdge->subedge(1),
+                                        e0,
+                                        myhedge(2),
                                         1) ; // child number
 
     //std::cout << "split_e01 " << ev0 << std::endl;
@@ -153,22 +99,21 @@ namespace ALUGrid
   {
     // NOTE: edge numbering is not opposite vertex !!!
     // see gitter_geo.cc
-    // the new edge needs to be in the middle (meaning edge 1 out of {0,1,2})
 
     /*                  2
 
                        / \
                       / 2 \
                      /     \
-                    /     1 \
+                    /     2 \
                    /         \
                   /           \
-               2 / 2         1 \  1
+               1 / 1         1 \ 2
                 /             * \
                /           *   2 \
               /      0  *         \
-             /       *           1 \
-            /     *   2             \
+             /       *           2 \
+            /     *   1             \
            /0  *                     \
           / *0                      1 \
           -----------------------------
@@ -176,33 +121,30 @@ namespace ALUGrid
       */
     alugrid_assert ( _inner == 0 );
     const int newLevel= 1 + level () ;
-    myhedge_t* splitEdge = myhedge(1);
+    myhedge_t* splitEdge = myhedge(2);
 
     myvertex_t * ev0 = splitEdge->subvertex (0) ;
     alugrid_assert (ev0) ;
 
-    myvertex_t * vxOld = vertexNotOnSplitEdge( 1 );
-    //myvertex_t * vxOld = myvertex(0);
-
-    edgepair_t subEdge = subEdges( splitEdge, myvertex(1), myvertex(2) );
+    myvertex_t * vxOld = myvertex(0);
 
     // create new inner edge
-    inneredge_t * e0 = new inneredge_t (newLevel, ev0, vxOld ) ;
+    inneredge_t * e0 = new inneredge_t (newLevel, vxOld, ev0 ) ;
     alugrid_assert ( e0 ) ;
 
     //std::cout << "split_e12 " << ev0 << std::endl;
     //std::cout << "new inner edge " << e0 << std::endl;
 
     innerface_t * f0 = new innerface_t (newLevel, // level
-                                        myhedge(0), twist(0),         // edge 0, twist
-                                        subEdge.first, twist(1), // edge 0, twist
-                                        e0, 0,                         // edge 1, twist
+                                        myhedge(0),         // edge 0
+                                        e0,                         // edge 1
+                                        splitEdge->subedge(0),
                                         0 ) ; // child number
 
     innerface_t * f1 = new innerface_t (newLevel, // level
-                                        e0, 1,                         // edge 1, twist
-                                        subEdge.second, twist(1), // edge 2, twist
-                                        myhedge(2), twist(2),         // edge 0, twist
+                                        e0,                         // edge 0
+                                        myhedge(1),  // edge 1
+                                        splitEdge->subedge(1),       // edge 2
                                         1 ) ; // child number
     alugrid_assert (f0 && f1 ) ;
     f0->append(f1) ;
@@ -218,11 +160,15 @@ namespace ALUGrid
     return ;
   }
 
-  template< class A >  void Hface3Top < A >::split_e20 ()
+  template< class A >  void Hface3Top < A >::split_e02 ()
   {
     // NOTE: edge numbering is not opposite vertex !!!
     // see gitter_geo.cc
-    // the new edge needs to be in the middle (meaning edge 1 out of {0,1,2})
+    // the new edge is directed away from the father vertex 1
+    // This implies that for all 3d split_ij methods with j>i+1 the new vertex has to be inserted
+    // directly before j, and all resulting edges are directed ascendingly
+    // NOTE: in this case the children of edge 1 are not both edge 1 with respect to their corresponding children
+    //
 
     /*                  2
 
@@ -232,78 +178,97 @@ namespace ALUGrid
                     /2      \
                    /         \
                   /           \
-               2 /0            \  1
+               1 /1            \  2
                 / *            1\
                / 2   *           \
               /         * 0       \
-             /2          1 *       \
+             /1          2 *       \
             /                 *     \
-           /                     * 1 \
+           /                     * 0 \
           / 0          0          1 * \
           -----------------------------
         0              0                 1
       */
 
+    alugrid_assert( !(this->is2d()) );
     alugrid_assert ( _inner == 0 );
     const int newLevel= 1 + level () ;
 
-    myhedge_t* splitEdge = myhedge( 2 );
+    myhedge_t* splitEdge = myhedge( 1 );
 
     // get vertices of new edge
     myvertex_t * ev0 = splitEdge->subvertex (0) ;
-    myvertex_t * vxOld = vertexNotOnSplitEdge( 2 );
 
-    edgepair_t subEdge = subEdges( splitEdge, myvertex(0), myvertex(2) );
-    //myvertex_t * vxOld = myvertex( 1 );
+    myvertex_t * vxOld = myvertex( 1 );
 
     alugrid_assert (ev0) ;
-    inneredge_t * e0 = new inneredge_t (newLevel, ev0, vxOld ) ;
+    inneredge_t * e0 = new inneredge_t (newLevel, vxOld, ev0 ) ;
     alugrid_assert ( e0 ) ;
 
     innerface_t * f0 = new innerface_t (newLevel, // level
-                                        e0, 0,                         // edge 0, twist
-                                        myhedge(1), twist(1),         // edge 1, twist
-                                        subEdge.second, twist(2), // edge 2, twist
+                                        myhedge(0),         // edge 0
+                                        splitEdge->subedge(0),         // edge 1
+                                        e0, // edge 2
                                         0 ) ; // child number
 
     innerface_t * f1 = new innerface_t (newLevel, // level
-                                        myhedge(0), twist(0),         // edge 0, twist
-                                        e0, 1,                         // edge 1, twist
-                                        subEdge.first, twist(2), // edge 2, twist
+                                        e0,         // edge 0
+                                        myhedge(2),                         // edge 1
+                                        splitEdge->subedge(1), // edge 2
                                         1 ) ; // child number
 
     alugrid_assert (f0 && f1 ) ;
 
-    //std::cout << "split_e20 " << ev0 << std::endl;
+    //std::cout << "split_e02 " << ev0 << std::endl;
     //std::cout << "Split face " << this << " into " << std::endl;
     //std::cout << "New subface 0" << f0 << std::endl;
     //std::cout << "New subface 1" << f1 << std::endl;
 
     f0->append(f1) ;
     _inner = new inner_t( f0 , e0 );
-    _rule = myrule_t::e20 ;
+    _rule = myrule_t::e02 ;
 
     return ;
   }
 
   template< class A >  void Hface3Top < A >::split_iso4 ()
   {
+    /*                  2
+
+                       /2 \
+                      /    \
+                     /      \
+                    /1      2\
+                   /          \
+                  /0    0     1\
+               1 /______________\  2
+                /2\1    2     2/2\
+               /   \          /   \
+              /     \0     1 /     \
+             /1     2\      /1     2\
+            /         \    /         \
+           /           \0 /           \
+          / 0   0    1  \/0     0    1 \
+          -----------------------------
+        0              0                 1
+      */
     alugrid_assert ( _inner == 0 );
+    alugrid_assert ( !(this->is2d()) );
     int l = 1 + level () ;
     myvertex_t * ev0 = myhedge(0)->subvertex (0) ;
     myvertex_t * ev1 = myhedge(1)->subvertex (0) ;
     myvertex_t * ev2 = myhedge(2)->subvertex (0) ;
     alugrid_assert (ev0 && ev1 && ev2 ) ;
     inneredge_t * e0 = new inneredge_t (l, ev0, ev1) ;
-    inneredge_t * e1 = new inneredge_t (l, ev1, ev2) ;
-    inneredge_t * e2 = new inneredge_t (l, ev2, ev0) ;
+    inneredge_t * e1 = new inneredge_t (l, ev0, ev2) ;
+    inneredge_t * e2 = new inneredge_t (l, ev1, ev2) ;
     alugrid_assert ( e0 && e1 && e2 ) ;
     e0->append(e1) ;
     e1->append(e2) ;
-    innerface_t * f0 = new innerface_t (l, this->subedge(0,0), twist(0), e2, 1, this->subedge(2,1), twist(2), 0) ;
-    innerface_t * f1 = new innerface_t (l, this->subedge(0,1), twist(0), this->subedge(1,0), twist(1), e0, 1, 1) ;
-    innerface_t * f2 = new innerface_t (l, e1, 1, this->subedge(1,1), twist(1), this->subedge(2,0), twist(2), 2) ;
-    innerface_t * f3 = new innerface_t (l, e0, 0, e1, 0, e2, 0, 3 ) ;
+    innerface_t * f0 = new innerface_t (l, this->subedge(0,0), this->subedge(1,0), e0, 0) ;
+    innerface_t * f1 = new innerface_t (l, this->subedge(0,1), e1, this->subedge(2,0), 1) ;
+    innerface_t * f2 = new innerface_t (l, e2, this->subedge(1,1), this->subedge(2,1), 2) ;
+    innerface_t * f3 = new innerface_t (l, e0, e1, e2, 3 ) ;
     alugrid_assert (f0 && f1 && f2 && f3) ;
     f0->append(f1) ;
     f1->append(f2) ;
@@ -322,32 +287,29 @@ namespace ALUGrid
       {
         typedef typename myhedge_t::myrule_t myhedgerule_t;
 
-        // rotate of hedge rule does nothing,
-        // so its actually useless
-
         case myrule_t::e01 :
-          myhedge (0)->refineImmediate (myhedgerule_t (myhedge_t::myrule_t::iso2).rotate (twist (0))) ;
+          myhedge (0)->refineImmediate (myhedgerule_t (myhedge_t::myrule_t::iso2)) ;
           split_e01 () ;
           break ;
         case myrule_t::e12 :
-          myhedge (1)->refineImmediate (myhedgerule_t (myhedge_t::myrule_t::iso2).rotate (twist (1))) ;
+          myhedge (2)->refineImmediate (myhedgerule_t (myhedge_t::myrule_t::iso2)) ;
           split_e12 () ;
           break ;
-        case myrule_t::e20 :
-          myhedge (2)->refineImmediate (myhedgerule_t (myhedge_t::myrule_t::iso2).rotate (twist (2))) ;
-          split_e20 () ;
+        case myrule_t::e02 :
+          myhedge (1)->refineImmediate (myhedgerule_t (myhedge_t::myrule_t::iso2)) ;
+          split_e02 () ;
           break ;
         case myrule_t::iso4 :
           //iso4 on a 2d face is just e12 bisection + setting the rule to iso4
           if(this->is2d()) {
-            myhedge (1)->refineImmediate (myhedgerule_t (myhedge_t::myrule_t::iso2).rotate (twist (1))) ;
+            myhedge (2)->refineImmediate (myhedgerule_t (myhedge_t::myrule_t::iso2)) ;
             split_e12 () ;
             _rule = myrule_t::iso4 ;
             break ;
           }
-          myhedge (0)->refineImmediate (myhedgerule_t (myhedge_t::myrule_t::iso2).rotate (twist (0))) ;
-          myhedge (1)->refineImmediate (myhedgerule_t (myhedge_t::myrule_t::iso2).rotate (twist (1))) ;
-          myhedge (2)->refineImmediate (myhedgerule_t (myhedge_t::myrule_t::iso2).rotate (twist (2))) ;
+          myhedge (0)->refineImmediate (myhedgerule_t (myhedge_t::myrule_t::iso2)) ;
+          myhedge (1)->refineImmediate (myhedgerule_t (myhedge_t::myrule_t::iso2)) ;
+          myhedge (2)->refineImmediate (myhedgerule_t (myhedge_t::myrule_t::iso2)) ;
           split_iso4 () ;
           break ;
         default :
@@ -369,7 +331,7 @@ namespace ALUGrid
     return ;
   }
 
-  template< class A > bool Hface3Top < A >::refine (myrule_t r, int twist)
+  template< class A > bool Hface3Top < A >::refine (myrule_t r, bool isRear)
   {
     if (r != getrule ())
     {
@@ -379,12 +341,12 @@ namespace ALUGrid
       {
         case myrule_t::e01 :
         case myrule_t::e12 :
-        case myrule_t::e20 :
+        case myrule_t::e02 :
         case myrule_t::iso4 :
         {
           typedef typename A::face3Neighbour::neighbour_t neighbour_t ;
           // get face neighbour
-          neighbour_t neigh = ( twist < 0 ) ? this->nb.front () : this->nb.rear()  ;
+          neighbour_t neigh = isRear ? this->nb.front () : this->nb.rear()  ;
 
           bool a = true;
           if(!r.bisection())
@@ -407,15 +369,17 @@ namespace ALUGrid
               if(r.bisection())
               {
                 //the neighbour may have changed
-                neighbour_t neigh = ( twist < 0 ) ? this->nb.front () : this->nb.rear()  ;
+                neighbour_t neigh = isRear ? this->nb.front () : this->nb.rear()  ;
                 //refine neighbour as long as it is leaf.
                 //We are at the refinement face, so the neighbour of the refined element
                 //has to be refined too
                 while(neigh.first->nbLeaf())
                 {
                   neigh.first->refineBalance (r, neigh.second);
-                  neigh = ( twist < 0 ) ? this->nb.front () : this->nb.rear()  ;
+                  neigh = isRear ? this->nb.front () : this->nb.rear()  ;
                 }
+
+                /*
                 for (innerface_t * f = dwnPtr() ; f ; f = f->next ())
                 {
                   // assert faces are leaf - this is not true anymore with weak compatibility
@@ -424,6 +388,7 @@ namespace ALUGrid
                   //alugrid_assert(f->nb.rear().first->nbLeaf());
                 ;
                 }
+                */
               }
             }
             else
@@ -608,10 +573,10 @@ namespace ALUGrid
 
     //int gFace = this->getGhost().second ;
 
-    innerbndseg_t * b0 = new innerbndseg_t (l, subface (0,0), twist (0), this , _bt, ghostInfo.child(0), ghostInfo.face(0) ) ;
-    innerbndseg_t * b1 = new innerbndseg_t (l, subface (0,1), twist (0), this , _bt, ghostInfo.child(1), ghostInfo.face(1) ) ;
-    //innerbndseg_t * b0 = new innerbndseg_t (l, subface (0,0), twist (0), this , _bt, 0, gFace ) ;
-    //innerbndseg_t * b1 = new innerbndseg_t (l, subface (0,1), twist (0), this , _bt, 0, gFace ) ;
+    innerbndseg_t * b0 = new innerbndseg_t (l, subface (0,0), isRear (0), this , _bt, ghostInfo.child(0), ghostInfo.face(0) ) ;
+    innerbndseg_t * b1 = new innerbndseg_t (l, subface (0,1), isRear (0), this , _bt, ghostInfo.child(1), ghostInfo.face(1) ) ;
+    //innerbndseg_t * b0 = new innerbndseg_t (l, subface (0,0), isRear (0), this , _bt, 0, gFace ) ;
+    //innerbndseg_t * b1 = new innerbndseg_t (l, subface (0,1), isRear (0), this , _bt, 0, gFace ) ;
 
     alugrid_assert (b0 && b1) ;
     b0->append(b1) ;
@@ -628,10 +593,10 @@ namespace ALUGrid
     // ghostInfo is filled by splitGhost, see gitter_tetra_top_pll.h
     this->splitGhost( ghostInfo );
 
-    innerbndseg_t * b0 = new innerbndseg_t (l, subface (0,0), twist (0), this , _bt, ghostInfo.child(0), ghostInfo.face(0)) ;
-    innerbndseg_t * b1 = new innerbndseg_t (l, subface (0,1), twist (0), this , _bt, ghostInfo.child(1), ghostInfo.face(1)) ;
-    innerbndseg_t * b2 = new innerbndseg_t (l, subface (0,2), twist (0), this , _bt, ghostInfo.child(2), ghostInfo.face(2)) ;
-    innerbndseg_t * b3 = new innerbndseg_t (l, subface (0,3), twist (0), this , _bt, ghostInfo.child(3), ghostInfo.face(3)) ;
+    innerbndseg_t * b0 = new innerbndseg_t (l, subface (0,0), isRear (0), this , _bt, ghostInfo.child(0), ghostInfo.face(0)) ;
+    innerbndseg_t * b1 = new innerbndseg_t (l, subface (0,1), isRear (0), this , _bt, ghostInfo.child(1), ghostInfo.face(1)) ;
+    innerbndseg_t * b2 = new innerbndseg_t (l, subface (0,2), isRear (0), this , _bt, ghostInfo.child(2), ghostInfo.face(2)) ;
+    innerbndseg_t * b3 = new innerbndseg_t (l, subface (0,3), isRear (0), this , _bt, ghostInfo.child(3), ghostInfo.face(3)) ;
     alugrid_assert (b0 && b1 && b2 && b3) ;
     b0->append(b1) ;
     b1->append(b2) ;
@@ -780,22 +745,23 @@ namespace ALUGrid
         switch (r) {
         case balrule_t::e01 :
         case balrule_t::e12 :
-        case balrule_t::e20 :
+        case balrule_t::e02 :
           //std::cout << "refLikeEl: e01 " << std::endl;
-          // if (!myhface (0)->refine (balrule_t (balrule_t::e01).rotate (twist (0)), twist (0))) return false ;
-          if (! face.refine (r, twist (0))) return false ;
+          // if (!myhface (0)->refine (balrule_t (balrule_t::e01), isRear(0))) return false ;
+          if (! face.refine (r, isRear (0))) return false ;
 
           split_bisection() ;
           break;
         case balrule_t::iso4 :
           //in the 2d case we just to the same as e12
-          if( face.is2d()){
-            if (! face.refine (r, twist (0))) return false ;
+          if( face.is2d())
+          {
+            if (! face.refine (r, isRear (0))) return false ;
             split_bisection() ;
             break;
           }
-          //if (!myhface (0)->refine (balrule_t (balrule_t::iso4).rotate (twist (0)), twist (0))) return false ;
-          if (! face.refine (r, twist (0))) return false ;
+          //if (!myhface (0)->refine (balrule_t (balrule_t::iso4), (isRear (0)))) return false ;
+          if (! face.refine (r, isRear (0))) return false ;
           split_iso4 () ;
           break;
         default :
@@ -825,7 +791,7 @@ namespace ALUGrid
       switch (r) {
         case myrule_t::e01 :
         case myrule_t::e12 :
-        case myrule_t::e20 :
+        case myrule_t::e02 :
           split_bisection();
           break ;
         case myrule_t::iso4 :
@@ -855,9 +821,9 @@ namespace ALUGrid
   //    #     ######     #    #    #  #    #    #      ####   #
 
   template< class A > TetraTop < A >
-  :: TetraTop (int l, myhface_t * f0, int t0,
-               myhface_t * f1, int t1, myhface_t * f2, int t2,
-               myhface_t * f3, int t3, innertetra_t *up, int nChild, double vol)
+  :: TetraTop (int l, myhface_t * f0, bool  t0,
+               myhface_t * f1, bool t1, myhface_t * f2, bool t2,
+               myhface_t * f3, bool t3, innertetra_t *up, int nChild, double vol)
     : A (f0, t0, f1, t1, f2, t2, f3, t3),
       _bbb (0), _up(up)
     , _inner( 0 )
@@ -866,8 +832,6 @@ namespace ALUGrid
     , _nChild(nChild)
     , _rule (myrule_t::nosplit)
   {
-    // vxMap is set by the setNewMapping routine
-    _vxMap[ 0 ] = _vxMap[ 1 ] = _vxMap[ 2 ] = _vxMap[ 3 ] = -1;
 
     // set level
     alugrid_assert ( this->level() == l );
@@ -879,25 +843,20 @@ namespace ALUGrid
     this->_bndid = _up->bndId();
 
 #ifdef ALUGRIDDEBUG
-    // check that _volume has the correct value
-    const double calculatedVolume = computeVolume();
-    const double myvol = volume();
-
-    //In the 2d case the 3d volume may be 0, so do not divide by it
-    if(this->is2d())
-      alugrid_assert ( std::abs( calculatedVolume - myvol ) < 1e-10 );
-    else
-      alugrid_assert ( std::abs( calculatedVolume - myvol ) / myvol < 1e-10 );
+    //TODO  check that _volume has the correct value
+    //if( std::abs( calculatedVolume - _volume ) >1e-10 )
+    //  std::cout << "Determinant of Tetra[" << this->getIndex() << "] is wrong" << std::endl;
+  //  alugrid_assert ( std::abs( calculatedVolume - _volume ) / _volume  < 1e-10 );
 #endif
   }
 
   // this is the macro element constructor
   template< class A > TetraTop < A >::
   TetraTop (int l,  // level
-            myhface_t * f0, int t0, // face, twist
-            myhface_t * f1, int t1, // face, twist
-            myhface_t * f2, int t2, // face, twist
-            myhface_t * f3, int t3, // face, twist
+            myhface_t * f0, bool t0, // face, isRear
+            myhface_t * f1, bool t1, // face, isRear
+            myhface_t * f2, bool t2, // face, isRear
+            myhface_t * f3, bool t3, // face, isRear
             SimplexTypeFlag simplexType )
     : A (f0, t0, f1, t1, f2, t2, f3, t3)
     , _bbb (0), _up(0)
@@ -921,15 +880,6 @@ namespace ALUGrid
       this->setSimplexTypeFlagOne() ;
     if( simplexType.type() % 2 )
       this->setSimplexTypeFlagZero() ;
-
-    // initial mapping is has to be adjusted according
-    // to the make-6 algorithm
-    // NOTE: the _vxMap numbers only affect the bisection refinement
-    const int mod = 1 - simplexType.orientation() ;
-    _vxMap[ 0 ] = 0;
-    _vxMap[ 1 ] = 1;
-    _vxMap[ 2 ] = 2 + mod ;
-    _vxMap[ 3 ] = 3 - mod ;
   }
 
   template< class A > TetraTop < A >::~TetraTop ()
@@ -951,12 +901,12 @@ namespace ALUGrid
       std::pair< Gitter::Geometric::hasFace3 *, int > connect( Gitter::Geometric::InternalHasFace3()( _up ), int( -1 ) );
       for( int i=0; i<4; ++i )
       {
-        // get face and twist
+        // get face and isRear
         myhface_t* face = myhface( i );
-        const int twst = twist( i );
+        const bool rearFace = isRear( i );
 
         // check whether this face has unresolved previous attached elements
-        if( face->moreAttachments( twst ) )
+        if( face->moreAttachments( rearFace ) )
         {
           // search face in father
           for( int ff=0; ff<4; ++ff )
@@ -967,7 +917,7 @@ namespace ALUGrid
             {
               // set face number of face in father
               connect.second = ff ;
-              face->detachElement ( twst, connect );
+              face->detachElement ( rearFace, connect );
               // break for loop for ff
               break ;
             }
@@ -976,7 +926,7 @@ namespace ALUGrid
         else
         {
           // normal detachment
-          face->detachElement ( twst );
+          face->detachElement ( rearFace );
         }
       }
     }
@@ -984,7 +934,7 @@ namespace ALUGrid
     {
       // the default normal detachment of all faces
       for( int i=0; i<4; ++i )
-        myhface( i )->detachElement ( twist( i ) ) ;
+        myhface( i )->detachElement ( isRear( i ) ) ;
     }
   }
 
@@ -994,12 +944,8 @@ namespace ALUGrid
     switch ( myhface( face )->getrule() )
     {
     case myhface_t::myrule_t::e01 :
-      alugrid_assert ( edge == 0 );  // for bisection we only get one subEdge of a face
-      return myhface ( face )->subedge ( edge ) ;
     case myhface_t::myrule_t::e12 :
-      alugrid_assert ( edge == 0 );  // for bisection we only get one subEdge of a face
-      return myhface ( face )->subedge ( edge ) ;
-    case myhface_t::myrule_t::e20 :
+    case myhface_t::myrule_t::e02 :
       alugrid_assert ( edge == 0 );  // for bisection we only get one subEdge of a face
       return myhface ( face )->subedge ( edge ) ;
     case myhface_t::myrule_t::iso4 :
@@ -1011,7 +957,7 @@ namespace ALUGrid
           return myface.subedge ( edge ) ;
         }
         alugrid_assert ( edge < 3 );
-        return ((twist ( face ) < 0) ? myface.subedge ((8 - edge + twist ( face )) % 3) : myface.subedge ((edge + twist ( face )) % 3)) ;
+        return  myface.subedge ( edge);
       }
     case myhface_t::myrule_t::nosplit :
       std::cerr << "**ERROR (FATAL): subedge () called on non-refined face. In " << __FILE__ << " " << __LINE__ << std::endl ;
@@ -1026,116 +972,6 @@ namespace ALUGrid
   }
 
 
-  // --subFaces
-  template< class A >
-  typename TetraTop < A >::facepair_t
-  TetraTop < A >::subFaces ( const int i )
-  {
-    // get face that we want sub faces from
-    myhface_t* face = myhface( i );
-
-    typedef typename myhface_t::myrule_t  myrule_t;
-    // get split rule of face
-    const myrule_t rule = face->getrule() ;
-    alugrid_assert ( rule == myrule_t::e01 ||
-            rule == myrule_t::e12 ||
-            rule == myrule_t::e20 );
-    alugrid_assert ( -3 <= twist( i ) && twist( i ) <= 2 );
-
-#ifdef ALUGRIDDEBUG
-    if( rule == myrule_t::iso4 )
-    {
-      std::cerr << "**ERROR (FATAL): subFaces () not implemented for iso4 " << i << ". In " << __FILE__ << " " << __LINE__ << std::endl ;
-      abort () ;
-    }
-    else if ( rule == myrule_t::nosplit )
-    {
-      std::cerr << "**ERROR (FATAL): subFaces () called on non-refined face " << i << ". In " << __FILE__ << " " << __LINE__ << std::endl ;
-      abort () ;
-    }
-#endif
-
-    // obtain rule id
-    const unsigned int ruleId = int(rule) - 2;
-    alugrid_assert ( ruleId <= 2 );
-
-    // std::cout << "subFaces rule " << ruleId << " of face " << i << " with twist " << twist( i ) << std::endl;
-
-    //                                twists  -3  -2  -1   0   1   2
-    static const int subFace[ 3 ][ 6 ] = {  {  1,  1,  0,  0,  0,  1  }, // rule e01
-                                            {  1,  0,  0,  0,  1,  1  }, // rule e12
-                                            {  0,  0,  0,  0,  1,  1  }  // rule e20
-                                         };
-    // sub face 0 and 1
-    unsigned int sub0 = subFace[ ruleId ][ twist( i ) + 3 ];
-
-    /*
-    if( elementType () == 0 && ruleId == 2 && twist( i ) == 0 )
-    {
-      sub0 = 0;
-    }
-    */
-    // return sub face 0 and 1 of face i
-    return facepair_t ( face->subface( sub0 ), face->subface( ! sub0 ) );
-  }
-
-  // --subFaces
-  template< class A >
-  typename TetraTop < A >::facepair_t
-  TetraTop < A >::subFaces ( const int i,
-                               const myvertex_t* vx0,
-                               const myvertex_t* vx1 )
-  {
-    alugrid_assert ( vx0 );
-    alugrid_assert ( vx1 );
-
-    // get face that we want sub faces from
-    myhface_t* face = myhface( i );
-
-    // get sub faces
-    myhface_t* subFce[ 2 ] = { face->subface( 0 ), face->subface( 1 ) };
-
-    // check face order with vertex0
-    int sub0 = 1 ;
-    for( int i=0; i<3; ++i )
-    {
-      if( subFce[ 0 ]->myvertex( i ) == vx0 )
-      {
-        sub0 = 0;
-        break;
-      }
-    }
-
-#ifdef ALUGRIDDEBUG
-    // make sure the vertex is on the other face
-    bool found0 = false ;
-    bool found1 = false ;
-    // check face order with vertex0
-    for( int i=0; i<3; ++i )
-    {
-      if( subFce[ sub0 ]->myvertex( i ) == vx0 )
-      {
-        found0 = true ;
-      }
-      if( subFce[ ! sub0 ]->myvertex( i ) == vx1 )
-      {
-        found1 = true ;
-      }
-    }
-    if( ! found0 || ! found1 )
-    {
-      std::cout << "Problem: " << face << std::endl;
-      std::cout << " vx0 " << vx0 << std::endl;
-      std::cout << " vx1 " << vx1 << std::endl;
-      std::cout << "sub0 " << subFce[ sub0 ] << std::endl;
-      std::cout << "sub1 " << subFce[ ! sub0 ] << std::endl;
-    }
-    alugrid_assert ( found0 );
-    alugrid_assert ( found1 );
-
-#endif
-    return facepair_t( subFce[ sub0 ], subFce[ ! sub0 ] );
-  }
 
   // --subface
   template< class A >  typename TetraTop < A >:: myhface_t * TetraTop < A >::subface (int i, int j)
@@ -1143,53 +979,20 @@ namespace ALUGrid
     switch ( myhface( i )->getrule() )
     {
     case myhface_t::myrule_t::e01 :
-      alugrid_assert ( j < 2 );
-      if ( twist(i) == 0 ||  twist(i) == 1 ||  twist(i) == -1 )
-        return myhface(i)->subface( j ) ;
-      if ( twist(i) == 2 ||  twist(i) == -2 || twist(i) == -3 )
-        return myhface(i)->subface(!j) ;
-      std::cerr << __FILE__ << " " << __LINE__ << "myhface(i)->subface()" << std::endl;
-      alugrid_assert ( false );
-      return 0;
     case myhface_t::myrule_t::e12 :
+    case myhface_t::myrule_t::e02 :
       alugrid_assert ( j < 2 );
-      if ( twist(i) == 0 ||  twist(i) == 2 ||  twist(i) == -3 )
-        return myhface(i)->subface(j) ;
-      if ( twist(i) == -1 || twist(i) == 1 ||  twist(i) == -2 )
-        return myhface(i)->subface(!j) ;
-      std::cerr << __FILE__ << " " << __LINE__ << "myhface(i)->subface()" << std::endl;
-      return 0;
-    case myhface_t::myrule_t::e20 :
-      alugrid_assert ( j < 2 );
-      if ( twist(i) == 1 ||  twist(i) == 2 ||  twist(i) == -2 )
-        return myhface(i)->subface(j) ;
-      if ( twist(i) == 0 ||  twist(i) == -1 || twist(i) == -3 )
-        return myhface(i)->subface(!j) ;
-      std::cerr << __FILE__ << " " << __LINE__ << "myhface(i)->subface()" << std::endl;
-      return 0;
+      return myhface(i)->subface(j) ;
     case myhface_t::myrule_t::iso4 :
       {
         myhface_t& myface (*(myhface(i)));
         //for the 2d faces we do the same as for e12
         if(myface.is2d()){
            alugrid_assert ( j < 2 );
-            if ( twist(i) == 0 ||  twist(i) == 2 ||  twist(i) == -3 )
-              return myface.subface(j) ;
-            if ( twist(i) == -1 || twist(i) == 1 ||  twist(i) == -2 )
-              return myface.subface(!j) ;
-            std::cerr << __FILE__ << " " << __LINE__ << "myhface(i)->subface()" << std::endl;
-            return 0;
+            return myface.subface(j) ;
         }
         alugrid_assert ( j < 4 );
-        if ( j == 3 )
-        {
-          return myface.subface(3);
-        }
-        else // ( j < 3 )
-        {
-          alugrid_assert ( j < 3 );
-          return myface.subface(twist(i) < 0 ? (7 - j + twist(i)) % 3 : (j + twist(i)) % 3) ;
-        }
+        return myface.subface(j) ;
       }
     case myhface_t::myrule_t::nosplit :
       std::cerr << "**ERROR (FATAL): subface () called on non-refined face. In " << __FILE__ << " " << __LINE__ << std::endl ;
@@ -1213,23 +1016,15 @@ namespace ALUGrid
 
     splitInfo( myrule_t::e01 );
 
-    myhedge_t* subEdge = this->subedge (2, 0);
-    myhedge_t* subEdge2 = this->subedge (3, 0);
-    myhedge_t* orgEdge = this->myhedge( 5 ) ;
-
-    const int edgeTwst = (orgEdge->myvertex( 0 ) == subEdge->myvertex( 1 )) ? 0 : 1;
-
     // new inner face
     innerface_t * newFace =
       new innerface_t (newLevel,
-                       subEdge,  0, // from face 2 get subedge 0
-                       orgEdge,  edgeTwst,
-                       subEdge2, 1 // from face 1 get subedge 0
+                       this->subedge (0, 0), // from face 0 get subedge 0
+                       this->subedge (1, 0), // from face 1 get subedge 0
+                       this->myhedge( 5 )
                       ) ;
     alugrid_assert ( newFace );
 
-    facepair_t subFace2 = subFaces( 2, myvertex( 0 ), myvertex( 1 ) ); // get sub face 0 and 1 of face 2
-    facepair_t subFace3 = subFaces( 3, myvertex( 0 ), myvertex( 1 ) ); // get sub face 0 and 1 of face 3
 
     // we divide by 2 means we divide the volume by 2
     const double childVolume = calculateChildVolume( 0.5 * _volume );
@@ -1238,16 +1033,16 @@ namespace ALUGrid
 
       3               2
          ___________
-        |3         2|     new inner face ( 4, 3 , 2 )
+        |3         2|     new inner face ( 4, 2 , 3 )
         |*\       .*|
         |  \     .  |     child 0 is the child which contains node 0
         | * \   . * |     child 1 is the child which contains node 1
         |    \ .    |
         |  *  \  *  |
         |    . \    |     4 becomes node 1 in child 0
-        |   *.  \   |     4 becomes node 0 in child 1
-        |  .     \  |
-        | .  * *  \ |
+        |   *.  \   |     child 0: (0,4,2,3)
+        |  .     \  |     4 becomes node 0 in child 1
+        | .  * *  \ |     child 1: (4,1,2,3)
         |0   1 0   1|
         ------*------
       0       4       1
@@ -1255,23 +1050,23 @@ namespace ALUGrid
     */
 
     innertetra_t * h0 = new innertetra_t (newLevel,
-                                          newFace, 0,
-                                          myhface( 1 ),   twist( 1 ),
-                                          subFace2.first, twist( 2 ),
-                                          subFace3.first, twist( 3 ),
+                                          subface(0,0), isRear(0),
+                                          subface(1,0), isRear(1),
+                                          myhface(2), isRear(2),
+                                          newFace, isRear(3),
                                           this, 0, childVolume) ;
 
     innertetra_t * h1 = new innertetra_t (newLevel,
-                                          myhface( 0 ),   twist( 0 ),
-                                          newFace, -1,
-                                          subFace2.second,twist( 2 ),
-                                          subFace3.second,twist( 3 ),
+                                          subface(0,1), isRear(0),
+                                          subface(1,1), isRear(1),
+                                          newFace, !isRear(3),
+                                          myhface(3), isRear(3),
                                           this, 1, childVolume) ;
 
     alugrid_assert (h0 && h1) ;
 
     // the new vertices are the ones that are missing
-    // i.e. 3 in child 0  and  0 in child 1
+    // i.e. 1 in child 0  and  0 in child 1
     alugrid_assert ( h0->myvertex( 0 ) == myvertex( 0 ) );
     alugrid_assert ( h0->myvertex( 2 ) == myvertex( 2 ) );
     alugrid_assert ( h0->myvertex( 3 ) == myvertex( 3 ) );
@@ -1281,11 +1076,11 @@ namespace ALUGrid
     alugrid_assert ( h1->myvertex( 3 ) == myvertex( 3 ) );
 
     // this is always the edge combo, i.e. if we
-    // split e30 then 3 is new in child 0 and 0 is new in child 1
+    // split e01 then 1 is new in child 0 and 0 is new in child 1
     alugrid_assert ( h0->myvertex( 1 ) == h1->myvertex( 0 ) );
 
     // remap vertices of children
-    setNewMapping( h0, h1, newFace, 1, 0);
+    setNewMapping( h0, h1, newFace );
 
     // store refinement rule that was used to split this tetra
     _rule = myrule_t::e01;
@@ -1300,23 +1095,15 @@ namespace ALUGrid
 
     splitInfo( myrule_t::e12 );
 
-    myhedge_t* subEdge = this->subedge (3, 0);
-    myhedge_t* subEdge2 = this->subedge (0, 0);
-    myhedge_t* orgEdge = this->myhedge( 2 ) ;
-
-    const int edgeTwst = (orgEdge->myvertex( 0 ) == subEdge->myvertex( 1 )) ? 1 : 0;
-
     // new inner face
     innerface_t * newFace =
       new innerface_t (newLevel,
-                       subEdge,  1, // from face 1 get subedge 0
-                       subEdge2, 0, // from face 2 get subedge 0
-                       orgEdge, edgeTwst
+                       this->subedge(0,0), // from face 1 get subedge 0
+                       myhedge(3), // from face 2 get subedge 0
+                       this->subedge(3,0)
                       ) ;
     alugrid_assert ( newFace );
 
-    facepair_t subFace0 = subFaces( 0, myvertex( 1 ), myvertex( 2 ) ); // get sub face 0 and 1 of face 0
-    facepair_t subFace3 = subFaces( 3, myvertex( 1 ), myvertex( 2 ) ); // get sub face 0 and 1 of face 3
 
     // we divide by 2 means we divide the volume by 2
     const double childVolume = calculateChildVolume( 0.5 * _volume );
@@ -1332,9 +1119,9 @@ namespace ALUGrid
         |    \ .    * 4
         |     \   *2|
         |    . \*   |     4 becomes node 2 in child 0
-        |   . * \   |     4 becomes node 1 in child 1
-        |  .*    \  |
-        | *       \ |
+        |   . * \   |     child 0: (0, 1, 4, 3)
+        |  .*    \  |     4 becomes node 1 in child 1
+        | *       \ |     child 1: (0, 4, 2, 3)
         *0         1|
         -------------
       0               1
@@ -1342,23 +1129,23 @@ namespace ALUGrid
     */
 
     innertetra_t * h0 = new innertetra_t (newLevel,
-                                          subFace0.first, twist( 0 ),
-                                          newFace, 0,
-                                          myhface( 2 ),  twist( 2 ),
-                                          subFace3.first, twist( 3 ),
+                                          subface(0,0), isRear(0),
+                                          myhface(1), isRear(1),
+                                          newFace, isRear(2),
+                                          subface(3,0), isRear(3),
                                           this, 0, childVolume) ;
 
     innertetra_t * h1 = new innertetra_t (newLevel,
-                                          subFace0.second, twist( 0 ),
-                                          myhface( 1 ), twist( 1 ),
-                                          newFace, -1,
-                                          subFace3.second, twist( 3 ),
+                                          subface(0,1), isRear(0),
+                                          newFace, !isRear(2),
+                                          myhface(2), isRear(2),
+                                          subface(3,1), isRear(3),
                                           this, 1, childVolume) ;
 
     alugrid_assert (h0 && h1) ;
 
     // the new vertices are the ones that are missing
-    // i.e. 3 in child 0  and  0 in child 1
+    // i.e. 2 in child 0  and  1 in child 1
     alugrid_assert ( h0->myvertex( 0 ) == myvertex( 0 ) );
     alugrid_assert ( h0->myvertex( 1 ) == myvertex( 1 ) );
     alugrid_assert ( h0->myvertex( 3 ) == myvertex( 3 ) );
@@ -1368,47 +1155,39 @@ namespace ALUGrid
     alugrid_assert ( h1->myvertex( 3 ) == myvertex( 3 ) );
 
     // this is always the edge combo, i.e. if we
-    // split e30 then 3 is new in child 0 and 0 is new in child 1
+    // split e12 then 2 is new in child 0 and 1 is new in child 1
     alugrid_assert ( h0->myvertex( 2 ) == h1->myvertex( 1 ) );
 
     // remap vertices of children
-    setNewMapping( h0, h1, newFace, 1, 2 );
+    setNewMapping( h0, h1, newFace );
 
     // set refinement rule that was used to refine this tetra
     _rule = myrule_t::e12 ;
   }
 
-  template< class A >  void TetraTop < A >::split_e20 ()
+  template< class A >  void TetraTop < A >::split_e02 ()
   {
     alugrid_assert ( _inner == 0 );
     const int newLevel = 1 + this->level();
 
-    splitInfo( myrule_t::e20 );
-
-    myhedge_t* subEdge2 = this->subedge (1, 0);
-    myhedge_t* subEdge = this->subedge (3, 0);
-    myhedge_t* orgEdge = this->myhedge( 4 ) ;
-
-    const int edgeTwst = (orgEdge->myvertex( 0 ) == subEdge->myvertex( 1 )) ? 0 : 1;
+    splitInfo( myrule_t::e02 );
 
     // new inner face
     innerface_t * newFace =
       new innerface_t (newLevel,
-                       orgEdge, edgeTwst,
-                       subEdge2, 1, // from face 2 get subedge 0
-                       subEdge,  0 // from face 1 get subedge 0
+                       this->subedge(0,0),
+                       myhedge(4),
+                       this->subedge(2,0) // from face 2 get subedge 0
                       ) ;
     alugrid_assert ( newFace );
 
-    facepair_t subFace1 = subFaces( 1, myvertex( 0 ), myvertex( 2 ) ); // get sub face 0 and 1 of face 0
-    facepair_t subFace3 = subFaces( 3, myvertex( 0 ), myvertex( 2 ) ); // get sub face 0 and 1 of face 1
 
     // we divide by 2 means we divide the volume by 2
     const double childVolume = calculateChildVolume( 0.5 * _volume );
 
     /*
 
-      3       4       2
+      3              2
          ___________
         |3         2|     new inner face ( 1, 4 , 2 )
         |*\       . |
@@ -1416,10 +1195,10 @@ namespace ALUGrid
         | * \   .   |     child 1 is the child which contains node 2
         |    \ .    |
         |  *  \     |
-        |   0. \    |     4 becomes node 2 in child 0
-        |  4*   \   |     4 becomes node 0 in child 1
-        |  .2 *  \  |
-        | .     * \ |
+        |   1. \    |     4 becomes node 2 in child 0
+        |  4*   \   |     child 0: (0, 1, 4, 3)
+        |  .2 *  \  |     4 becomes node 1rin child 1
+        | .     * \ |     child 1: (1, 4, 2, 3)
         |0         1|
         -------------
       0               1
@@ -1427,40 +1206,40 @@ namespace ALUGrid
     */
 
     innertetra_t * h0 = new innertetra_t (newLevel,
-                                          newFace, 0,
-                                          subFace1.first, twist( 1 ),
-                                          myhface( 2 ),  twist( 2 ),
-                                          subFace3.first, twist( 3 ),
+                                          subface(0,0), isRear(0),
+                                          myhface(1), isRear(1),
+                                          subface(2,0), isRear(2),
+                                          newFace, isRear(3),
                                           this, 0, childVolume) ;
 
     innertetra_t * h1 = new innertetra_t (newLevel,
-                                          myhface( 0 ), twist( 0 ),
-                                          subFace1.second, twist( 1 ),
-                                          newFace, -2,
-                                          subFace3.second, twist( 3 ),
+                                          subface(0,1), isRear(0),
+                                          newFace, !(isRear(3)),
+                                          myhface(3), isRear(3),
+                                          subface(2,1), isRear(2),
                                           this, 1, childVolume) ;
 
     alugrid_assert (h0 && h1) ;
 
     // the new vertices are the ones that are missing
-    // i.e. 3 in child 0  and  0 in child 1
+    // i.e. 2 in child 0  and  1 in child 1
     alugrid_assert ( h0->myvertex( 0 ) == myvertex( 0 ) );
     alugrid_assert ( h0->myvertex( 1 ) == myvertex( 1 ) );
     alugrid_assert ( h0->myvertex( 3 ) == myvertex( 3 ) );
 
-    alugrid_assert ( h1->myvertex( 1 ) == myvertex( 1 ) );
+    alugrid_assert ( h1->myvertex( 0 ) == myvertex( 1 ) );
     alugrid_assert ( h1->myvertex( 2 ) == myvertex( 2 ) );
     alugrid_assert ( h1->myvertex( 3 ) == myvertex( 3 ) );
 
     // this is always the edge combo, i.e. if we
-    // split e30 then 3 is new in child 0 and 0 is new in child 1
-    alugrid_assert ( h0->myvertex( 2 ) == h1->myvertex( 0 ) );
+    // split e02 then 2 is new in child 0 and 1 is new in child 1
+    alugrid_assert ( h0->myvertex( 2 ) == h1->myvertex( 1 ) );
 
     // remap vertices of children
-    setNewMapping( h0, h1, newFace, 2, 0 );
+    setNewMapping( h0, h1, newFace );
 
     // set refinement rule that was used to refine this tetra
-    _rule = myrule_t::e20;
+    _rule = myrule_t::e02;
   }
 
   template< class A >  void TetraTop < A >::split_e23 ()
@@ -1470,23 +1249,15 @@ namespace ALUGrid
 
     splitInfo( myrule_t::e23 );
 
-    myhedge_t* subEdge2 = this->subedge (1, 0);
-    myhedge_t* subEdge = this->subedge (0, 0);
-    myhedge_t* orgEdge = this->myhedge( 0 ) ;
-
-    const int edgeTwst = (orgEdge->myvertex( 0 ) == subEdge->myvertex( 1 )) ? 0 : 1;
-
     // new inner face
     innerface_t * newFace =
       new innerface_t (newLevel,
-                       subEdge2, 1, // from face 2 get subedge 0
-                       subEdge,  0, // from face 1 get subedge 0
-                       orgEdge, edgeTwst
+                       myhedge(0),
+                       this->subedge(2,0), // from face 2 get subedge 0
+                       this->subedge(3,0)
                       ) ;
     alugrid_assert ( newFace );
 
-    facepair_t subFace0 = subFaces( 0, myvertex( 2 ), myvertex( 3 ) ); // get sub face 0 and 1 of face 0
-    facepair_t subFace1 = subFaces( 1, myvertex( 2 ), myvertex( 3 ) ); // get sub face 0 and 1 of face 1
 
     // we divide by 2 means we divide the volume by 2
     const double childVolume = calculateChildVolume( 0.5 * _volume );
@@ -1495,16 +1266,16 @@ namespace ALUGrid
 
       3       4       2
          ___________
-        |3   2*3   2|     new inner face ( 1, 4 , 2 )
+        |3   2*3   2|     new inner face ( 0, 1, 4 )
         | \       . |
         |  \ * * .  |     child 0 is the child which contains node 2
         |   \   .   |     child 1 is the child which contains node 3
         |   *\ .*   |
         |     \     |
         |  * . \ *  |     4 becomes node 3 in child 0
-        |3  .   \   |     4 becomes node 0 in child 1
-        | *.     \* |
-        | .       \ |
+        |3  .   \   |     child 0: (0, 1, 2, 4)
+        | *.     \* |     4 becomes node 2 in child 1
+        | .       \ |     child 1: (0, 1, 4, 3)
         |0         1|
         -------------
       0               1
@@ -1512,101 +1283,93 @@ namespace ALUGrid
     */
 
     innertetra_t * h0 = new innertetra_t (newLevel,
-                                          subFace0.first, twist( 0 ),
-                                          subFace1.first, twist( 1 ),
-                                          newFace, 0,
-                                          myhface( 3 ),  twist( 3 ),
+                                          myhface(0), isRear(0),
+                                          newFace, isRear(1),
+                                          subface(2,0), isRear(2),
+                                          subface(3,0), isRear(3),
                                           this, 0, childVolume) ;
 
     innertetra_t * h1 = new innertetra_t (newLevel,
-                                          subFace0.second, twist( 0 ),
-                                          subFace1.second, twist( 1 ),
-                                          myhface( 2 ),  twist( 2 ),
-                                          newFace, -1,
+                                          newFace, !isRear(1),
+                                          myhface(1), isRear(1),
+                                          subface(2,1), isRear(2),
+                                          subface(3,1), isRear(3),
                                           this, 1, childVolume) ;
 
     alugrid_assert (h0 && h1) ;
 
     // the new vertices are the ones that are missing
-    // i.e. 3 in child 0  and  0 in child 1
-    alugrid_assert ( h1->myvertex( 0 ) == myvertex( 0 ) );
-    alugrid_assert ( h1->myvertex( 1 ) == myvertex( 1 ) );
-    alugrid_assert ( h1->myvertex( 3 ) == myvertex( 3 ) );
-
+    // i.e. 3 in child 0  and  2 in child 1
     alugrid_assert ( h0->myvertex( 0 ) == myvertex( 0 ) );
     alugrid_assert ( h0->myvertex( 1 ) == myvertex( 1 ) );
     alugrid_assert ( h0->myvertex( 2 ) == myvertex( 2 ) );
 
-    // this is always the edge combo, i.e. if we
+    alugrid_assert ( h1->myvertex( 0 ) == myvertex( 0 ) );
+    alugrid_assert ( h1->myvertex( 1 ) == myvertex( 1 ) );
+    alugrid_assert ( h1->myvertex( 3 ) == myvertex( 3 ) );
+
+    // see picture above - location of new vertex
     alugrid_assert ( h0->myvertex( 3 ) == h1->myvertex( 2 ) );
 
     // remap vertices of children
-    setNewMapping( h0, h1, newFace, 2, 3 );
+    setNewMapping( h0, h1, newFace );
 
     // set refinement rule that was used to refine this tetra
     _rule = myrule_t::e23 ;
   }
 
-  template< class A >  void TetraTop < A >::split_e30 ()
+  template< class A >  void TetraTop < A >::split_e03 ()
   {
     alugrid_assert ( _inner == 0 );
     const int newLevel = 1 + this->level();
 
-    splitInfo( myrule_t::e30 );
+    splitInfo( myrule_t::e03 );
     /*
 
       3               2
          ___________
-        |3        *2|     new inner face ( 1, 4 , 2 )
+        |3        *2|     new inner face ( 1, 2, 4 )
         | \     * . |
         |  \  *  .  |     child 0 is the child which contains node 0
         |   \  .    |     child 1 is the child which contains node 3
         |0*  \.     |
       4 *    .\     |
         | *  . \    |     4 becomes node 3 in child 0
-        |3 .*   \   |     4 becomes node 0 in child 1
-        | .   *  \  |
-        |.      * \ |
+        |3 .*   \   |     child 0: (0, 1, 2, 4)
+        | .   *  \  |     4 becomes node 2 in child 1
+        |.      * \ |     child 1> (1, 2, 4, 3)
         |0         1|
         -------------
       0               1
 
     */
 
-    myhedge_t* subEdge2 = this->subedge (2, 0);
-    myhedge_t* subEdge = this->subedge (1, 0);
-    myhedge_t* orgEdge = this->myhedge( 3 ) ;
-
-    const int edgeTwst = (orgEdge->myvertex( 0 ) == subEdge->myvertex( 1 )) ? 0 : 1;
-
     // new inner face
     innerface_t * newFace =
       new innerface_t (newLevel,
-                       subEdge2, 1, // from face 2 get subedge 0
-                       subEdge,  0, // from face 1 get subedge 0
-                       orgEdge, edgeTwst
+                       myhedge(2),
+                       this->subedge(1,0), // from face 1 get subedge 0
+                       this->subedge(2,0)
                       ) ;
 
     alugrid_assert ( newFace ) ;
 
-    facepair_t subFace1 = subFaces( 1, myvertex( 0 ), myvertex( 3 ) ); // get sub face 0 and 1 of face 1
-    facepair_t subFace2 = subFaces( 2, myvertex( 0 ), myvertex( 3 ) ); // get sub face 0 and 1 of face 2
 
     // we divide by 2 means we divide the volume by 2
     const double childVolume = calculateChildVolume( 0.5 * _volume );
 
     innertetra_t * h0 = new innertetra_t (newLevel,
-                                          newFace, 0,
-                                          subFace1.first, twist (1),
-                                          subFace2.first, twist (2),
-                                          myhface(3), twist (3),
+                                          myhface(0), isRear(0),
+                                          subface(1,0), isRear(1),
+                                          subface(2,0), isRear(2),
+                                          newFace, isRear(3),
                                           this, 0, childVolume) ;
 
     innertetra_t * h1 = new innertetra_t (newLevel,
-                                          myhface( 0 ), twist( 0 ),
-                                          subFace1.second, twist (1),
-                                          subFace2.second, twist (2),
-                                          newFace, -3,
+                                          newFace, !isRear(3),
+                                          myhface(3), isRear(3),
+                                          subface(1,1), isRear(1),
+                                          subface(2,1), isRear(2),
                                           this, 1, childVolume) ;
 
     alugrid_assert (h0 && h1) ;
@@ -1617,40 +1380,34 @@ namespace ALUGrid
     alugrid_assert ( h0->myvertex( 1 ) == myvertex( 1 ) );
     alugrid_assert ( h0->myvertex( 2 ) == myvertex( 2 ) );
 
-    alugrid_assert ( h1->myvertex( 1 ) == myvertex( 1 ) );
-    alugrid_assert ( h1->myvertex( 2 ) == myvertex( 2 ) );
+    alugrid_assert ( h1->myvertex( 0 ) == myvertex( 1 ) );
+    alugrid_assert ( h1->myvertex( 1 ) == myvertex( 2 ) );
     alugrid_assert ( h1->myvertex( 3 ) == myvertex( 3 ) );
 
     // this is always the edge combo, i.e. if we
-    // split e30 then 3 is new in child 0 and 0 is new in child 1
-    alugrid_assert ( h0->myvertex( 3 ) == h1->myvertex( 0 ) );
+    // split e03 then 3 is new in child 0 and 2 is new in child 1
+    alugrid_assert ( h0->myvertex( 3 ) == h1->myvertex( 2 ) );
 
     // remap vertices of children
-    setNewMapping( h0, h1, newFace, 3, 0 );
+    setNewMapping( h0, h1, newFace );
 
     // set refinement rule that was used to refine this tetra
-    _rule = myrule_t::e30;
+    _rule = myrule_t::e03;
   }
 
-  template< class A >  void TetraTop < A >::split_e31 ()
+  template< class A >  void TetraTop < A >::split_e13 ()
   {
     alugrid_assert ( _inner == 0 );
     const int newLevel = 1 + this->level () ;
 
-    splitInfo( myrule_t::e31 );
-
-    myhedge_t* subEdge2 = this->subedge (2, 0);
-    myhedge_t* subEdge = this->subedge (0, 0);
-    myhedge_t* orgEdge = this->myhedge( 1 ) ;
-
-    const int edgeTwst = (orgEdge->myvertex( 0 ) == subEdge->myvertex( 1 )) ? 1 : 0;
+    splitInfo( myrule_t::e13 );
 
     // new inner face
     innerface_t * newFace =
       new innerface_t (newLevel,
-                       orgEdge, edgeTwst,
-                       subEdge, 1,  // from face 1 get subedge 0
-                       subEdge2, 0  // from face 2 get subedge 0
+                       myhedge(1),
+                       this->subedge(1,0),  // from face 1 get subedge 0
+                       this->subedge(3,0)  // from face 3 get subedge 0
                       ) ;
 
     alugrid_assert ( newFace ) ;
@@ -1659,15 +1416,15 @@ namespace ALUGrid
 
       3               2
          ___________
-        |3         2|     new inner face ( 0, 4, 2 )
+        |3         2|     new inner face ( 0, 2, 4 )
         | \       .*|
         |  \     .  |     child 0 is the child which contains node 1
         |   \   . * |     child 1 is the child which contains node 3
         |    \ .    |
-        |     \  *  |
-        |    . \    |      4 becomes node 3 in child 0
-        |   .  1*  <--- 4  4 becomes node 1 in child 1
-        |  .  * 3\  |
+        |     \  *  |      4 becomes node 3 in child 0
+        |    . \    |      child 0: (0, 1, 2, 4)
+        |   .  1*  <--- 4  4 becomes node 2 in child 1
+        |  .  * 3\  |      child 1: (0, 2, 4, 3)
         | . *     \ |
         |0*       1\|
         -------------
@@ -1677,163 +1434,51 @@ namespace ALUGrid
     // we divide by 2 means we divide the volume by 2
     const double childVolume = calculateChildVolume( 0.5 * _volume );
 
-    facepair_t subFace0 = subFaces( 0, myvertex( 1 ), myvertex( 3 ) ); // get sub face 0 and 1 of face 0
-    facepair_t subFace2 = subFaces( 2, myvertex( 1 ), myvertex( 3 ) ); // get sub face 0 and 1 of face 1
 
 
     innertetra_t * h0 = new innertetra_t (newLevel,
-                                          subFace0.first, twist( 0 ),
-                                          newFace, 0,
-                                          subFace2.first, twist ( 2 ),
-                                          myhface( 3 ), twist ( 3 ),
+                                          myhface(0), isRear(0),
+                                          subface(1,0), isRear(1),
+                                          newFace, isRear(2),
+                                          subface(3,0), isRear(3),
                                           this, 0, childVolume) ;
 
     innertetra_t * h1 = new innertetra_t (newLevel,
-                                          subFace0.second, twist( 0 ),
-                                          myhface( 1 ), twist( 1 ),
-                                          subFace2.second, twist( 2 ),
-                                          newFace, -1,
+                                          newFace, !(isRear(2)),
+                                          myhface(2), isRear(2),
+                                          subface(1,1), isRear(1),
+                                          subface(3,1), isRear(3),
                                           this, 1, childVolume) ;
 
     alugrid_assert (h0 && h1) ;
 
     // the new vertices are the ones that are missing
-    // i.e. 3 in child 0  and  0 in child 1
+    // i.e. 3 in child 0  and  1 in child 1
     alugrid_assert ( h0->myvertex( 0 ) == myvertex( 0 ) );
     alugrid_assert ( h0->myvertex( 1 ) == myvertex( 1 ) );
     alugrid_assert ( h0->myvertex( 2 ) == myvertex( 2 ) );
 
+    //the internal numbering changes
     alugrid_assert ( h1->myvertex( 0 ) == myvertex( 0 ) );
-    alugrid_assert ( h1->myvertex( 2 ) == myvertex( 2 ) );
+    alugrid_assert ( h1->myvertex( 1 ) == myvertex( 2 ) );
     alugrid_assert ( h1->myvertex( 3 ) == myvertex( 3 ) );
 
     // this is always the edge combo, i.e. if we
-    // split e30 then 3 is new in child 0 and 0 is new in child 1
-    alugrid_assert ( h0->myvertex( 3 ) == h1->myvertex( 1 ) );
+    // split e03 then 3 is new in child 0 and 2 is new in child 1
+    alugrid_assert ( h0->myvertex( 3 ) == h1->myvertex( 2 ) );
 
     // remap vertices of children
-    setNewMapping( h0, h1, newFace, 3, 1 );
+    setNewMapping( h0, h1, newFace );
 
     // set refinement rule that was used to refine this tetra
-    _rule = myrule_t::e31;
+    _rule = myrule_t::e13;
   }
 
   // --setNewMapping
   template< class A >  void
   TetraTop < A >::setNewMapping( innertetra_t* h0, innertetra_t* h1,
-                                 innerface_t* newFace,
-                                 const int newVx0, const int newVx1 )
+                                 innerface_t* newFace)
   {
-    // vertex 0 is always containd in child 0, and not in child 1
-    myvertex_t* vx0 = this->myvertex( _vxMap[ 0 ] );
-    //for 2dbisection vx0 stays vx0 (and thus 0) in all children
-    // we use the ALBERTA 2d algorithm with the map ALU (or vxMap) 1,2,3 to ALBERTA 0,1,2
-    if(this->is2d())
-    {
-      // vertex 1 is always containd in child 0, and not in child 1
-      vx0 = this->myvertex( _vxMap[ 1 ] );
-    }
-
-    bool found = false ;
-    for( int i=0; i<4; ++i )
-    {
-      if( h0->myvertex( i ) == vx0 )
-      {
-        found = true ;
-        break ;
-      }
-    }
-
-    // if vx0 was not found in child 0 we have to swap the children
-    innertetra_t* t0 = ( found ) ? h0 : h1;
-    innertetra_t* t1 = ( found ) ? h1 : h0;
-
-    // the vxMap for the 2d refinement
-    if ( this->is2d() )
-    {
-      ///////////////////////////////////////////////////
-      //  Bisection 2d refinement, always refine edge 1--2
-      ///////////////////////////////////////////////////
-
-      // set vertex mapping (child 0)
-      t0->_vxMap[ 0 ] = _vxMap[ 0 ];
-      t0->_vxMap[ 1 ] = _vxMap[ 3 ];
-      t0->_vxMap[ 2 ] = _vxMap[ 1 ];
-      t0->_vxMap[ 3 ] = _vxMap[ 2 ];
-
-      // set vertex mapping (child 1)
-      t1->_vxMap[ 0 ] = _vxMap[ 0 ];
-      t1->_vxMap[ 1 ] = _vxMap[ 2 ];
-      t1->_vxMap[ 2 ] = _vxMap[ 3 ];
-      t1->_vxMap[ 3 ] = _vxMap[ 1 ];
-    }
-    else if( stevensonRefinement_ )
-    {
-      ///////////////////////////////////////////////////
-      //  Stevenson refinement, always refine edge 0--3
-      ///////////////////////////////////////////////////
-
-      // set vertex mapping (child 0)
-      t0->_vxMap[ 0 ] = _vxMap[ 0 ];
-      t0->_vxMap[ 1 ] = _vxMap[ 3 ];
-      t0->_vxMap[ 2 ] = _vxMap[ 1 ];
-      t0->_vxMap[ 3 ] = _vxMap[ 2 ];
-
-      // set vertex mapping (child 1)
-      t1->_vxMap[ 0 ] = _vxMap[ 3 ];
-      t1->_vxMap[ 1 ] = _vxMap[ 0 ];
-      const char fce3 = ( elementType () == 0 ) ? 1 : 0;
-      t1->_vxMap[ 2 ] = _vxMap[ 1 + fce3 ]; // for type 0   2 else 1
-      t1->_vxMap[ 3 ] = _vxMap[ 2 - fce3 ]; // for type 0   1 else 2
-    }
-    else
-    {
-      ///////////////////////////////////////////////////
-      //  ALBERTA refinement, always refine edge 0--1
-      ///////////////////////////////////////////////////
-
-      // set vertex mapping (child 0)
-      t0->_vxMap[ 0 ] = _vxMap[ 0 ];
-      t0->_vxMap[ 1 ] = _vxMap[ 2 ];
-      t0->_vxMap[ 2 ] = _vxMap[ 3 ];
-      t0->_vxMap[ 3 ] = _vxMap[ 1 ];
-
-      // set vertex mapping (child 1)
-      t1->_vxMap[ 0 ] = _vxMap[ 1 ];
-      t1->_vxMap[ 3 ] = _vxMap[ 0 ];
-      const char fce3 = ( elementType () == 0 ) ? 1 : 0;
-      t1->_vxMap[ 1 ] = _vxMap[ 2 + fce3 ]; // for type 0   2 else 1
-      t1->_vxMap[ 2 ] = _vxMap[ 3 - fce3 ]; // for type 0   1 else 2
-    }
-
-#ifdef ALUGRIDDEBUG
-    /*
-    std::cout << "Map0 = ( " ;
-    for( int i=0; i<4 ; ++ i )
-    {
-      std::cout << int(h0->_vxMap[i]) << " " ;
-    }
-    std::cout << " ) " << std::endl;
-    std::cout << "Map1 = ( " ;
-    for( int i=0; i<4 ; ++ i )
-    {
-      std::cout << int(h1->_vxMap[i]) << " " ;
-    }
-    std::cout << " ) " << std::endl;
-    */
-
-    for(int i=0; i<4; ++i )
-    {
-      for(int j=i+1; j<4; ++ j)
-      {
-        if( i != j )
-        {
-          alugrid_assert ( h0->_vxMap[ i ] != h0->_vxMap[ j ] );
-          alugrid_assert ( h1->_vxMap[ i ] != h1->_vxMap[ j ] );
-        }
-      }
-    }
-#endif
     // append h1 to h0
     h0->append( h1 );
 
@@ -1846,71 +1491,13 @@ namespace ALUGrid
   }
 
 
-  template< class A >  int
-  TetraTop < A >::vertexTwist( const int twst, const int vx ) const
-  {
-    return twst < 0 ? (7-vx+twst)%3 : (vx+twst)%3;
-  }
-
-  template< class A > int
-  TetraTop < A >::calculateFace2Twist( const int vxIndex, const myhface_t* subFace ) const
-  {
-    const int faceIndices[ 3 ] = { subFace->myvertex( 0 )->getIndex(),
-                                   subFace->myvertex( 1 )->getIndex(),
-                                   subFace->myvertex( 2 )->getIndex() };
-
-    for(int twst = -3; twst<3; ++twst )
-    {
-      // search for vx 1
-      if( vxIndex == faceIndices[ vertexTwist(twst, 1) ] )
-      {
-        return twst;
-      }
-    }
-
-    std::cout << "Valid twist not found!!!" << std::endl;
-    return 0;
-    // we should not get here
-    alugrid_assert ( false );
-    abort();
-    return -5;
-  }
-
-  template< class A > int
-  TetraTop < A >::calculateFace3Twist( const int (&vx)[2], const myhface_t* subFace, const int secondVx ) const
-  {
-    //std::cout << "check v0 = " << vx[0] << " v1 = " << vx[1] << std::endl;
-
-    const int faceIndices[ 3 ] = { subFace->myvertex( 0 )->getIndex(),
-                                   subFace->myvertex( 1 )->getIndex(),
-                                   subFace->myvertex( 2 )->getIndex() };
-    //std::cout << faceIndices[0] << " " << faceIndices[1] << " " << faceIndices[2] << " " << std::endl;
-
-    for(int twst = -3; twst<3; ++twst )
-    {
-      // if vx0 and vx1 match we are done
-      if( vx[ 0 ] == faceIndices[ vertexTwist(twst, 0) ] &&
-          vx[ 1 ] == faceIndices[ vertexTwist(twst, secondVx ) ] )
-      {
-        return twst;
-      }
-    }
-
-    std::cout << "Valid twist not found!!!" << std::endl;
-    return 0;
-
-    // we should not get here
-    alugrid_assert ( false );
-    abort();
-    return -5;
-  }
 
   // --checkTetra
   template< class A > bool
   TetraTop < A >::checkTetra( const innertetra_t *tetra, const int nChild ) const
   {
-    // make sure face twists are ok
-    bool twistOk = true ;
+    // make sure faces are ok
+    bool facesOk = true ;
 
     std::set< int > verticesFound;
     alugrid_assert ( tetra->nChild() == nChild );
@@ -1926,20 +1513,12 @@ namespace ALUGrid
       for(int i=0; i<3; ++i )
       {
         verticesFound.insert( tetra->myvertex( fce, i )->getIndex() );
-        // use proto type to check face twists
+        // use proto type to check face
         if( tetra->myvertex( Gitter::Geometric::Tetra::prototype[ fce ][ i ] )
               != tetra->myvertex( fce, i ) )
         {
-          const int vx0 = Gitter::Geometric::Tetra::prototype[ fce ][ 0 ] ;
-          const int vx1 = Gitter::Geometric::Tetra::prototype[ fce ][ 1 ] ;
-
-          const int vx[2] = { tetra->myvertex( vx0 )->getIndex(),
-                              tetra->myvertex( vx1 )->getIndex()
-                            };
-
-          int twst = calculateFace3Twist( vx, tetra->myhface( fce ), 1 );
-          std::cout << "Twist of face " << fce << " is wrong, it should be " << twst << std::endl;
-          twistOk = false ;
+          std::cout << "face " << fce << " is wrong" << std::endl;
+          facesOk = false ;
           continue ;
         }
       }
@@ -1957,7 +1536,7 @@ namespace ALUGrid
     // make sure we have only 4 different vertices
     alugrid_assert ( verticesFound.size() == 4 );
 
-    return twistOk;
+    return facesOk;
   }
 
   template< class A >  void TetraTop < A >::
@@ -1968,19 +1547,27 @@ namespace ALUGrid
     typedef typename A::inneredge_t inneredge_t;
     const int l = 1 + this->level () ;
 
-    myvertex_t * e31 = myhface (0)->myhedge ((twist(0) < 0) ? ((9+twist(0))%3) : (twist(0)%3))->subvertex (0) ;
-    myvertex_t * e20 = myhface (1)->myhedge ((twist(1) < 0) ? ((9+twist(1))%3) : (twist(1)%3))->subvertex (0) ;
-    alugrid_assert (e31 && e20);
-    inneredge_t * e0 = new inneredge_t (l, e31, e20) ;
+    //Choice of diagonal is important for shape regularity
+    //This algorithm is described in Bey,2000 : Simplicial Grid Refinement ...
+    myvertex_t * e13 = myhface (1)->myhedge (2)->subvertex (0) ;
+    myvertex_t * e02 = myhface (0)->myhedge (1)->subvertex (0) ;
+    alugrid_assert (e13 && e02);
+    inneredge_t * e0 = new inneredge_t (l, e02, e13) ;
     alugrid_assert (e0) ;
-    innerface_t * f0 = new innerface_t (l, subedge (3, 2), ((twist(3)>=0)?1:0), subedge (1, 2), ((twist(1)>=0)?1:0), subedge (2, 2), ((twist(2)>=0)?1:0)) ;
-    innerface_t * f1 = new innerface_t (l, subedge (3, 0), ((twist(3)>=0)?1:0), subedge (2, 1), ((twist(2)>=0)?1:0), subedge (0, 2), ((twist(0)>=0)?1:0)) ;
-    innerface_t * f2 = new innerface_t (l, subedge (3, 1), ((twist(3)>=0)?1:0), subedge (0, 1), ((twist(0)>=0)?1:0), subedge (1, 0), ((twist(1)>=0)?1:0)) ;
-    innerface_t * f3 = new innerface_t (l, subedge (2, 0), ((twist(2)>=0)?0:1), subedge (0, 0), ((twist(0)>=0)?0:1), subedge (1, 1), ((twist(1)>=0)?0:1)) ;
-    innerface_t * f4 = new innerface_t (l, e0, 0, subedge (3, 2), ((twist(3)>=0)?0:1), subedge (2, 1), ((twist(2)>=0)?1:0)) ;
-    innerface_t * f5 = new innerface_t (l, e0, 0, subedge (3, 1), ((twist(3)>=0)?1:0), subedge (0, 2), ((twist(0)>=0)?0:1)) ;
-    innerface_t * f6 = new innerface_t (l, e0, 0, subedge (1, 0), ((twist(1)>=0)?0:1), subedge (0, 0), ((twist(0)>=0)?1:0)) ;
-    innerface_t * f7 = new innerface_t (l, e0, 0, subedge (1, 2), ((twist(1)>=0)?1:0), subedge (2, 0), ((twist(2)>=0)?0:1)) ;
+    //first the 4 inner faces of tetrahedra at each corner of the father
+    //In DUNE numbering
+    // 0,1,3 : 0,2,4 : 1,2,5 : 3,4,5
+    //then the four faces containing the diagonal
+    //In DUNE numbering of the edges they are
+    // 0,1,4 : 1,2,4 :  1,3,4 : 1,4,5
+    innerface_t * f0 = new innerface_t (l, subedge (0, 0), subedge (1, 0), subedge (2, 0)) ;
+    innerface_t * f1 = new innerface_t (l, subedge (0, 1), subedge (1, 1), subedge (3, 0)) ;
+    innerface_t * f2 = new innerface_t (l, subedge (0, 2), subedge (2, 1), subedge (3, 1)) ;
+    innerface_t * f3 = new innerface_t (l, subedge (1, 2), subedge (2, 2), subedge (3, 2)) ;
+    innerface_t * f4 = new innerface_t (l, subedge (0, 0), subedge (1, 1), e0) ;
+    innerface_t * f5 = new innerface_t (l, subedge (0, 2), e0, subedge (3, 0)) ;
+    innerface_t * f6 = new innerface_t (l, subedge (2, 0), e0, subedge (1, 2)) ;
+    innerface_t * f7 = new innerface_t (l, e0, subedge (2, 1), subedge (3, 2)) ;
     alugrid_assert (f0 && f1 && f2 && f3 && f4 && f5 && f6 && f7) ;
     f0->append(f1) ;
     f1->append(f2) ;
@@ -1994,14 +1581,32 @@ namespace ALUGrid
     const double childVolume = calculateChildVolume( 0.125 * _volume );
 
     // pointer `this' is the pointer to the father element
-    innertetra_t * h0 = new innertetra_t (l, f0, -1, subface(1, 0), twist(1), subface(2, 0), twist(2), subface(3, 0), twist(3), this, 0 , childVolume) ;
-    innertetra_t * h1 = new innertetra_t (l, subface(0, 0), twist(0), f1, -3, subface(2, 2), twist(2), subface(3, 1), twist(3), this, 1 , childVolume) ;
-    innertetra_t * h2 = new innertetra_t (l, subface(0, 2), twist(0), subface(1, 1), twist(1), f2, -1, subface(3, 2), twist(3), this, 2 , childVolume) ;
-    innertetra_t * h3 = new innertetra_t (l, subface(0, 1), twist(0), subface(1, 2), twist(1), subface(2, 1), twist(2), f3, 0,  this, 3 , childVolume) ;
-    innertetra_t * h4 = new innertetra_t (l, f7, -3, subface(2, 3), ((twist(2)>=0) ? ((twist(2)+2)%3) : twist(2)) , f4, 2, f0, 0, this, 4 , childVolume) ;
-    innertetra_t * h5 = new innertetra_t (l, f4, -3, f1, 0, f5, 2, subface(3, 3), ((twist(3)>=0) ? (twist(3)+1)%3 : (twist(3)-1)%3-1), this, 5 , childVolume) ;
-    innertetra_t * h6 = new innertetra_t (l, f3, -1, f6, -3, subface(1, 3), ((twist(1)>=0) ? twist(1) : twist(1)%3-1), f7, 1, this, 6 , childVolume) ;
-    innertetra_t * h7 = new innertetra_t (l, subface(0, 3), ((twist(0)>=0) ? (twist(0)+1)%3 : (twist(0)-1)%3-1), f5, -3, f2, 0, f6, 1, this, 7 , childVolume) ;
+    // First the tetrahedra at the corners - numbered by corner number
+    innertetra_t * h0 = new innertetra_t (l, subface(0, 0), isRear(0), subface(1, 0), isRear(1), subface(2, 0), isRear(2), f0, isRear(3), this, 0 , childVolume) ;
+    innertetra_t * h1 = new innertetra_t (l, subface(0, 1), isRear(0), subface(1, 1), isRear(1), f1, isRear(2), subface(3, 0), isRear(3), this, 1 , childVolume) ;
+    innertetra_t * h2 = new innertetra_t (l, subface(0, 2), isRear(0), f2, isRear(1), subface(2, 1), isRear(2), subface(3, 1), isRear(3), this, 2 , childVolume) ;
+    innertetra_t * h3 = new innertetra_t (l, f3, isRear(0), subface(1, 2), isRear(1), subface(2, 2), isRear(2), subface(3, 2), isRear(3), this, 3 , childVolume) ;
+    innertetra_t * h4 = new innertetra_t (l, f0, !(isRear(3)), f4, true, subface(1, 3), isRear(1), f6, false, this, 4 , childVolume) ;
+    innertetra_t * h5 = new innertetra_t (l, subface(0, 3), isRear(0), f4, false, f1, !(isRear(2)), f5, true, this, 5 , childVolume) ;
+    innertetra_t * h6 = new innertetra_t (l, f6, true, subface(2, 3), isRear(2), f7, false, f3, !(isRear(0)), this, 6 , childVolume) ;
+    innertetra_t * h7 = new innertetra_t (l, f5, false, f2, !(isRear(1)), f7, true, subface(3, 3), isRear(3), this, 7 , childVolume) ;
+
+  //std::cout << h0 ;
+ //checkTetra(h0,0);
+ //std::cout << h1 ;
+ //checkTetra(h1,1);
+ //std::cout << h2;
+ //checkTetra(h2,2);
+ //std::cout << h3 ;
+ //checkTetra(h3,3);
+ //std::cout << h4 ;
+ //checkTetra(h4,4);
+ //std::cout << h5;
+ //checkTetra(h5,5);
+ //std::cout << h6 ;
+ //checkTetra(h6,6);
+ //std::cout << h7;
+ //checkTetra(h7,7);
     alugrid_assert (h0 && h1 && h2 && h3 && h4 && h5 && h6 && h7) ;
     h0->append(h1) ;
     h1->append(h2) ;
@@ -2041,9 +1646,9 @@ namespace ALUGrid
   //   std::cout << "( " << i << ", 0) " << subedge(i,0);
 #endif
 
-    innerface_t * f0 = new innerface_t (l, subedge (2, 0), 1, subedge (0, 2), ((twist(0)>=0)?1:0), subedge (3, 0), 0) ;
-    innerface_t * f1 = new innerface_t (l, subedge (1, 0), 1, subedge (0, 0), ((twist(0)>=0)?1:0), subedge (2, 0), 0) ;
-    innerface_t * f2 = new innerface_t (l, subedge (3, 0), 1, subedge (0, 1), ((twist(0)>=0)?1:0), subedge (1, 0), 0) ;
+    innerface_t * f0 = new innerface_t (l, subedge (0, 0), subedge (1, 0), subedge (3, 0) );
+    innerface_t * f1 = new innerface_t (l, subedge (0, 0), subedge (2, 0), subedge (3, 1) );
+    innerface_t * f2 = new innerface_t (l, subedge (1, 0), subedge (2, 0), subedge (3, 2) );
   //  std::cout << "f1: " << f1 ;
   //  std::cout << "f0: "<< f0 ;
    // std::cout << "f2: " <<f2 ;
@@ -2062,25 +1667,22 @@ namespace ALUGrid
     //  std::cout << "(" << i <<  ", 0)" << subface (i,0 ) << "( " << i <<  ", 1)" << subface (i,1);
 #endif
 
-    // the twist < 0 for subface 3 of face 0 is needed
-    // because it is "upside down" in the old face and cannot just be oriented as before
-
     // pointer `this' is the pointer to the father element
-    innertetra_t * h0 = new innertetra_t (l, subface(0, 0), twist(0), f0, -1, subface(2, 1), twist(2), subface(3, 0), twist(3), this, 0 , childVolume) ;
-    innertetra_t * h1 = new innertetra_t (l, subface(0, 1), twist(0), subface(1, 1), twist(1), subface(2, 0), twist(2), f1, -1, this, 1 , childVolume) ;
-    innertetra_t * h2 = new innertetra_t (l, subface(0, 2), twist(0), subface(1, 0), twist(1), f2, -1, subface(3, 1), twist(3), this, 2 , childVolume) ;
-    innertetra_t * h3 = new innertetra_t (l, subface(0, 3), twist(0) < 0 ? twist(0)%3-1 : twist(0), f2, 0, f1, 0, f0, 0, this, 3 , childVolume) ;
+    innertetra_t * h0 = new innertetra_t (l, subface(0,0), isRear(0), subface(1,0), isRear(1), f0, isRear(2), subface(3,0), isRear(3), this, 0 , childVolume) ;
+    innertetra_t * h1 = new innertetra_t (l, subface(0,1), isRear(0), f1, isRear(1), subface(2,0), isRear(2), subface(3,1), isRear(3), this, 1 , childVolume) ;
+    innertetra_t * h2 = new innertetra_t (l, f2, isRear(0), subface(1,1), isRear(1), subface(2,1), isRear(2), subface(3,2), isRear(3), this, 2 , childVolume) ;
+    innertetra_t * h3 = new innertetra_t (l, f0, !(isRear(2)), f1, !(isRear(1)), f2, !(isRear(0)), subface(3,3), isRear(3), this, 3 , childVolume) ;
 
 #ifdef ALUGRIDDEBUG
     //this check produces output, when loadbalancing and refining the transported elements, because the ghost neighbours do not exist yet
-   // std::cout << h0 ;
-    //checkTetra(h0,0);
-   // std::cout << h1 ;
-    //checkTetra(h1,1);
-   // std::cout << h2;
-    //checkTetra(h2,2);
-   // std::cout << h3;
-    //alugrid_assert(checkTetra(h3,3));
+  // std::cout << h0 ;
+  // checkTetra(h0,0);
+  // std::cout << h1 ;
+  // checkTetra(h1,1);
+  // std::cout << h2;
+  // checkTetra(h2,2);
+  // std::cout << h3;
+  // alugrid_assert(checkTetra(h3,3));
 #endif
 
 
@@ -2103,58 +1705,46 @@ namespace ALUGrid
     switch(r)
     {
       case myrule_t::e01 :
-        _faces[ 0 ] = 2 ;
-        _faces[ 1 ] = 3 ;
-        _vertices[ 0 ] = 0 ;
-        _vertices[ 1 ] = 1 ;
-        _faceRules[ 0 ] = face3rule_t::e20;
+        _faces[ 0 ] = 0 ;
+        _faces[ 1 ] = 1 ;
+        _faceRules[ 0 ] = face3rule_t::e01;
         _faceRules[ 1 ] = face3rule_t::e01;
         _caller = new CallSplitImpl< myrule_t::e01 > ();
+        break ;
+      case myrule_t::e02 :
+        _faces[ 0 ] = 0 ;
+        _faces[ 1 ] = 2 ;
+        _faceRules[ 0 ] = face3rule_t::e02;
+        _faceRules[ 1 ] = face3rule_t::e01;
+        _caller = new CallSplitImpl< myrule_t::e02 > ();
+        break ;
+      case myrule_t::e03 :
+        _faces[ 0 ] = 1 ;
+        _faces[ 1 ] = 2 ;
+        _faceRules[ 0 ] = face3rule_t::e02;
+        _faceRules[ 1 ] = face3rule_t::e02;
+        _caller = new CallSplitImpl< myrule_t::e03 > ();
         break ;
       case myrule_t::e12 :
         _faces[ 0 ] = 0 ;
         _faces[ 1 ] = 3 ;
-        _vertices[ 0 ] = 1 ;
-        _vertices[ 1 ] = 2 ;
-        _faceRules[ 0 ] = face3rule_t::e20;
-        _faceRules[ 1 ] = face3rule_t::e12;
+        _faceRules[ 0 ] = face3rule_t::e12;
+        _faceRules[ 1 ] = face3rule_t::e01;
         _caller = new CallSplitImpl< myrule_t::e12 > ();
         break ;
-      case myrule_t::e20 :
+      case myrule_t::e13 :
         _faces[ 0 ] = 1 ;
         _faces[ 1 ] = 3 ;
-        _vertices[ 0 ] = 2 ;
-        _vertices[ 1 ] = 0 ;
-        _faceRules[ 0 ] = face3rule_t::e01;
-        _faceRules[ 1 ] = face3rule_t::e20;
-        _caller = new CallSplitImpl< myrule_t::e20 > ();
+        _faceRules[ 0 ] = face3rule_t::e12;
+        _faceRules[ 1 ] = face3rule_t::e02;
+        _caller = new CallSplitImpl< myrule_t::e13 > ();
         break ;
       case myrule_t::e23 :
-        _faces[ 0 ] = 0 ;
-        _faces[ 1 ] = 1 ;
-        _vertices[ 0 ] = 2 ;
-        _vertices[ 1 ] = 3 ;
+        _faces[ 0 ] = 2 ;
+        _faces[ 1 ] = 3 ;
         _faceRules[ 0 ] = face3rule_t::e12;
         _faceRules[ 1 ] = face3rule_t::e12;
         _caller = new CallSplitImpl< myrule_t::e23 > ();
-        break ;
-      case myrule_t::e30 :
-        _faces[ 0 ] = 1 ;
-        _faces[ 1 ] = 2 ;
-        _vertices[ 0 ] = 3 ;
-        _vertices[ 1 ] = 0 ;
-        _faceRules[ 0 ] = face3rule_t::e20;
-        _faceRules[ 1 ] = face3rule_t::e01;
-        _caller = new CallSplitImpl< myrule_t::e30 > ();
-        break ;
-      case myrule_t::e31 :
-        _faces[ 0 ] = 0 ;
-        _faces[ 1 ] = 2 ;
-        _vertices[ 0 ] = 3 ;
-        _vertices[ 1 ] = 1 ;
-        _faceRules[ 0 ] = face3rule_t::e01;
-        _faceRules[ 1 ] = face3rule_t::e12;
-        _caller = new CallSplitImpl< myrule_t::e31 > ();
         break ;
       default :
         std::cerr << "**FEHLER (FATAL) beim unbedingten Verfeinern mit unbekannter Regel: " ;
@@ -2183,7 +1773,7 @@ namespace ALUGrid
 
       {
         for (int i = 0 ; i < 4 ; ++i)
-          myhface (i)->refineImmediate (face3rule_t (myhface_t::myrule_t::iso4).rotate (twist (i))) ;
+          myhface (i)->refineImmediate (face3rule_t (myhface_t::myrule_t::iso4)) ;
       }
 
       //in the 2d case we split the tetra differently
@@ -2233,15 +1823,15 @@ namespace ALUGrid
 
               for (int i = 0 ; i < 4 ; ++i )
                 //rotate should do nothing on iso4
-                if (! myhface (i)->refine (face3rule_t (face3rule_t::iso4).rotate (twist (i)), twist (i))) return false ;
+                if (! myhface (i)->refine (face3rule_t (face3rule_t::iso4), isRear (i))) return false ;
             }
             break ;
           case myrule_t::e01 :
           case myrule_t::e12 :
-          case myrule_t::e20 :
+          case myrule_t::e02 :
           case myrule_t::e23 :
-          case myrule_t::e30 :
-          case myrule_t::e31 :
+          case myrule_t::e03 :
+          case myrule_t::e13 :
             if( ! BisectionInfo::refineFaces( this, r ) ) return false ;
             break ;
           default :
@@ -2282,7 +1872,7 @@ namespace ALUGrid
           for (int i = 0 ; i < 4 ; ++i)
           {
             if (i != fce)
-              if ( ! myhface (i)->refine (balrule_t ( balrule_t::iso4 ).rotate (twist (i)), twist (i)) )
+              if ( ! myhface (i)->refine (balrule_t ( balrule_t::iso4 ), isRear(i)) )
                 return false ;
           }
           _req = myrule_t::nosplit ;
@@ -2523,7 +2113,7 @@ namespace ALUGrid
         {
           alugrid_assert( face.getrule() == balrule_t::e01 ||
                           face.getrule() == balrule_t::e12 ||
-                          face.getrule() == balrule_t::e20 ||
+                          face.getrule() == balrule_t::e02 ||
                           face.getrule() == balrule_t::iso4 );
           const int subFaces = ( face.getrule() == balrule_t::iso4 && ( ! this->is2d() ) ) ? 4 : 2;
           for (int j = 0 ; j < subFaces ; ++j ) face.subface (j)->nb.complete (face.nb) ;
@@ -2578,7 +2168,7 @@ namespace ALUGrid
     switch (myhface(i)->getrule()) {
       case myhface_t::myrule_t::e01 :
       case myhface_t::myrule_t::e12 :
-      case myhface_t::myrule_t::e20 :
+      case myhface_t::myrule_t::e02 :
         alugrid_assert ( j == 0 );
         return myhface (i)->subedge (0) ;
       case myhface_t::myrule_t::iso4 :
@@ -2587,7 +2177,7 @@ namespace ALUGrid
           return myhface (i)->subedge (0) ;
         }
         alugrid_assert ( j < 3 );
-        return ((twist (i) < 0) ? myhface (i)->subedge ((8 - j + twist (i)) % 3) : myhface (i)->subedge ((j + twist (i)) % 3)) ;
+        return myhface(i)->subedge(j);
       case myhface_t::myrule_t::nosplit :
         std::cerr << "**FEHLER (FATAL): subedge () auf nicht in verfeinerter Fl\"ache aufgerufen. In " << __FILE__ << " " << __LINE__ << std::endl ;
         abort () ;
@@ -2605,51 +2195,21 @@ namespace ALUGrid
     switch (face->getrule ())
     {
     case myhface_t::myrule_t::e01 :
-      alugrid_assert ( j < 2 );
-      if ( twist(i) == 0 ||  twist(i) == 1  ||  twist(i) == -1 )
-        return face->subface(j) ;
-      if ( twist(i) == 2 ||  twist(i) == -2 ||  twist(i) == -3 )
-        return face->subface(!j) ;
-      std::cerr << __FILE__ << " " << __LINE__ << "myhface(i)->subface()" << std::endl;
-      return 0;
     case myhface_t::myrule_t::e12 :
+    case myhface_t::myrule_t::e02 :
       alugrid_assert ( j < 2 );
-      if ( twist(i) == 0  ||  twist(i) == 2 ||  twist(i) == -3 )
-        return face->subface(j) ;
-      if ( twist(i) == -1 ||  twist(i) == 1 ||  twist(i) == -2 )
-        return face->subface(!j) ;
-      std::cerr << __FILE__ << " " << __LINE__ << "myhface(i)->subface()" << std::endl;
-      return 0;
-    case myhface_t::myrule_t::e20 :
-      alugrid_assert ( j < 2 );
-      if ( twist(i) == 1 ||  twist(i) == 2 ||  twist(i) == -2 )
-        return face->subface(j) ;
-      if ( twist(i) == 0 ||  twist(i) == -1 || twist(i) == -3 )
-        return myhface(i)->subface(!j) ;
-      std::cerr << __FILE__ << " " << __LINE__ << "myhface(i)->subface()" << std::endl;
-      return 0;
+      return myhface(i)->subface(j) ;
     case myhface_t::myrule_t::iso4 :
       // in 2d case do the same as e12
       if(face->is2d())
       {
         alugrid_assert ( j < 2 );
-        if ( twist(i) == 0  ||  twist(i) == 2 ||  twist(i) == -3 )
-          return face->subface(j) ;
-        if ( twist(i) == -1 ||  twist(i) == 1 ||  twist(i) == -2 )
-          return face->subface(!j) ;
-        std::cerr << __FILE__ << " " << __LINE__ << "myhface(i)->subface()" << std::endl;
-        return 0;
+        return myhface(i)->subface(j) ;
       }
-
-      alugrid_assert ( j < 4 );
-      if ( j == 3 )
+      else
       {
-        return face->subface (3) ;
-      }
-      else // ( j < 3 )
-      {
-        alugrid_assert( j < 3 );
-        return face->subface (twist(i) < 0 ? (7 - j + twist(i)) % 3 : (j + twist(i)) % 3) ;
+        alugrid_assert ( j < 4 );
+        return myhface(i)->subface (j) ;
       }
     case myhface_t::myrule_t::nosplit :
       std::cerr << "**FEHLER (FATAL): subface () auf nicht verfeinerter Fl\"ache aufgerufen. In " << __FILE__ << " " << __LINE__ << std::endl ;
@@ -2670,15 +2230,12 @@ namespace ALUGrid
   {
     alugrid_assert( ! myhface(0)->is2d() );
     const int l = 1 + this->level () ;
-    innerperiodic3_t * p0 = new innerperiodic3_t (l, subface (0,0), twist (0), subface (1,0), twist (1), this , 0) ;
-    innerperiodic3_t * p1 = new innerperiodic3_t (l, subface (0,1), twist (0), subface (1,2), twist (1), this , 1) ;
-    innerperiodic3_t * p2 = new innerperiodic3_t (l, subface (0,2), twist (0), subface (1,1), twist (1), this , 2) ;
-
-    // Mir ist nicht ganz klar, warum der Twist auf diese seltsame Art umzurechnen ist,
-    // die Zeile (bzw. die Formel) habe ich aus Mario's Tetradeder Split Iso-8 "uber-
-    // nommen, ohne im einzelnen nachzupr"ufen, ob die Regel richtig ist. (BS)
-
-    innerperiodic3_t * p3 = new innerperiodic3_t (l, subface (0,3), (twist(0) >= 0 ? (twist(0)+1)%3 : (twist(0)-1)%3-1), subface (1,3), (twist(1)>=0 ? (twist(1)+1)%3 : (twist(1)-1)%3-1) , this , 3) ;
+    //TODO: This may be wrong unless we can guarantee twist-free periodic faces
+    //which we should...
+    innerperiodic3_t * p0 = new innerperiodic3_t (l, subface (0,0), isRear (0), subface (1,0), isRear (1), this , 0) ;
+    innerperiodic3_t * p1 = new innerperiodic3_t (l, subface (0,1), isRear (0), subface (1,1), isRear (1), this , 1) ;
+    innerperiodic3_t * p2 = new innerperiodic3_t (l, subface (0,2), isRear (0), subface (1,2), isRear (1), this , 2) ;
+    innerperiodic3_t * p3 = new innerperiodic3_t (l, subface (0,3), isRear (0), subface (1,3), isRear (1), this , 3) ;
     alugrid_assert (p0 && p1 && p2 && p3) ;
     p0->append(p1) ;
     p1->append(p2) ;
@@ -2689,7 +2246,8 @@ namespace ALUGrid
     return ;
   }
 
-  template< class A > void Periodic3Top < A >::split_bisection (myrule_t r)
+  /*
+  template< class A > void Periodic3Top < A >::split_bisection ()
   {
     alugrid_assert( myhface(0)->is2d() );
     const int l = 1 + this->level () ;
@@ -2704,6 +2262,23 @@ namespace ALUGrid
     p0->_up = p1->_up = this;
     return ;
   }
+  */
+
+  template< class A > void Periodic3Top < A >::split_bisection ()
+  {
+    const int l = 1 + this->level () ;
+    //TODO: This may be wrong unless we can guarantee twist-free periodic faces
+    //which we should...
+    innerperiodic3_t * p0 = new innerperiodic3_t (l, subface (0,0), isRear (0), subface (1,0), isRear (1), this , 0) ;
+    innerperiodic3_t * p1 = new innerperiodic3_t (l, subface (0,1), isRear (0), subface (1,1), isRear (1), this , 1) ;
+    alugrid_assert (p0 && p1) ;
+    p0->append(p1) ;
+    _dwn = p0 ;
+    //The rules of the adjacent faces need to coincide
+    _rule = myhface(0)->getrule() ;
+    p0->_up = p1->_up = this; //us
+    return ;
+  }
 
   template< class A > void Periodic3Top < A >::refineImmediate (myrule_t r) {
 
@@ -2712,65 +2287,46 @@ namespace ALUGrid
     // verfeinert ist -> ist ein Blatt der Hierarchie.
 
     alugrid_assert (this->leaf()) ;
+    // myhface_t::myrule_t and myrule_t should be the same
+    // typedef typename myhface_t::myrule_t face3rule_t;
     switch(r)
     {
       case myrule_t::iso4 :
-        if(myhface (0)->is2d()) // 2d refinement
         {
-          //std::cerr << "**ERROR (FATAL) refinement of Periodic3Top in 2d not implemented yet! " ;
-          //std::cerr << "[" << r << "]. In " << __FILE__ << __LINE__ << std::endl ;
-          //std::abort () ;
+        // Das refineImmediate (..) auf allen Fl"achen wird vom periodic3::refine (..)
+        // zwar nicht ben"otigt, da schliesslich alle Fl"achen sauber sind, wenn
+        // "uberall hface3::refine (..) true geliefert hat, wohl aber z.B. von
+        // restore () oder abgeleiteten Funktionen die eine direkte Verfeinerung
+        // erzwingen m"ussen und d"urfen.
 
-          typedef typename myhface_t::myrule_t face3rule_t;
-          myhface (0)->refineImmediate (face3rule_t (r).rotate (twist (0))) ;
-          myhface (1)->refineImmediate (face3rule_t (r).rotate (twist (1))) ;
-          split_bisection (r) ;
-          break ;
+        myhface_t* face0 = myhface (0);
+        myhface_t* face1 = myhface (1);
+        if( face0->is2d() )
+        {
+          // for 2d use e01
+          myrule_t fr( myrule_t::e01 );
+          face0->refineImmediate ( fr ) ;
+          face1->refineImmediate ( fr ) ;
+          split_bisection () ;
         }
-        else // 3d case
+        else
         {
-          // Das refineImmediate (..) auf allen Fl"achen wird vom periodic3::refine (..)
-          // zwar nicht ben"otigt, da schliesslich alle Fl"achen sauber sind, wenn
-          // "uberall hface3::refine (..) true geliefert hat, wohl aber z.B. von
-          // restore () oder abgeleiteten Funktionen die eine direkte Verfeinerung
-          // erzwingen m"ussen und d"urfen.
-
-          typedef typename myhface_t::myrule_t face3rule_t;
-          myhface (0)->refineImmediate (face3rule_t (r).rotate (twist (0))) ;
-          myhface (1)->refineImmediate (face3rule_t (r).rotate (twist (1))) ;
+          face0->refineImmediate (r) ;
+          face1->refineImmediate (r) ;
           split_iso4 () ;
-          break ;
         }
-
-        std::cerr << "**ERROR (FATAL) refinement of Periodic3Top didd not work: " ;
-        std::cerr << "[" << r << "]. In " << __FILE__ << __LINE__ << std::endl ;
-        std::abort () ;
         break ;
+        }
 
       case myrule_t::e01 :
+      case myrule_t::e02 :
       case myrule_t::e12 :
-      case myrule_t::e20 :
-        if(myhface (0)->is2d()) // 2d refinement
-        {
-          //std::cerr << "**ERROR (FATAL) refinement of Periodic3Top in 2d not implemented yet! " ;
-          //std::cerr << "[" << r << "]. In " << __FILE__ << __LINE__ << std::endl ;
-          //std::abort () ;
-
-          typedef typename myhface_t::myrule_t face3rule_t;
-          myhface (0)->refineImmediate (face3rule_t (r).rotate (twist (0))) ;
-          myhface (1)->refineImmediate (face3rule_t (r).rotate (twist (1))) ;
-          split_bisection( r ) ;
-
-          assert( myhface(0)->level() == myhface(1)->level() );
-
-          break ;
-        }
-
-        // Mit den drei anisotropen Regeln k"onnen wir leider noch nichts anfangen.
-
-        std::abort () ;
+        myhface (0)->refineImmediate (r) ;
+        myhface (1)->refineImmediate (r) ;
+        split_bisection () ;
+        break ;
       default :
-        std::cerr << "**FEHLER (FATAL) beim unbedingten Verfeinern mit unbekannter Regel: " ;
+        std::cerr << "**ERROR (FATAL) refinement of Periodic3Top did not work: " ;
         std::cerr << "[" << r << "]. In " << __FILE__ << __LINE__ << std::endl ;
         std::abort () ;
         break ;
@@ -2790,46 +2346,21 @@ namespace ALUGrid
 
   template< class A > bool Periodic3Top < A >::refineBalance (balrule_t r, int fce)
   {
-    switch (r)
+    // Der nachfolgende Aufruf nutzt aus, dass die Regel der periodischen R"ander
+    // sich direkt auf die Balancierungsregel des entsprechenden Polygonverbinders
+    // projezieren l"asst (n"amlich 1:1). Deshalb unterscheidet der Aufruf nicht nach
+    // der angeforderten Regel in einer 'case' Anweisung.
+
+    // take opposite face
+    const int opp = 1 - fce ;
+    if (myhface (opp)->refine (typename myhface_t::myrule_t (r), isRear (opp)))
     {
-      case balrule_t::iso4:
-      case balrule_t::e01:
-      case balrule_t::e12:
-      case balrule_t::e20:
-        {
-          // Der nachfolgende Aufruf nutzt aus, dass die Regel der periodischen R"ander
-          // sich direkt auf die Balancierungsregel des entsprechenden Polygonverbinders
-          // projezieren l"asst (n"amlich 1:1). Deshalb unterscheidet der Aufruf nicht nach
-          // der angeforderten Regel in einer 'case' Anweisung.
-
-          // take opposite face
-          const int opp = 1 - fce ;
-          if (myhface (opp)->refine (typename myhface_t::myrule_t (r).rotate (twist (opp)), twist (opp)))
-          {
-            refineImmediate (r) ;
-            return true ;
-          }
-          else
-          {
-            return false ;
-          }
-        }
-
-      default:
-        {
-          std::cerr << "**WARNING (IGNORED) in Periodic3Top < A >::refineBalance ( "<< r << " ) , file "
-             << __FILE__ << ":" << __LINE__ << " periodic refinement is only implemented for isometric refinement!" << std::endl ;
-
-          assert(false);
-          std::abort();
-
-          // Bisher kann die Balancierung nur die isotrope Achtelung handhaben,
-          // falls mehr gew"unscht wird, muss es hier eingebaut werden. Im Moment wird
-          // die Balancierung einfach verweigert, d.h. die Verfeinerung des anfordernden
-          // Elements f"allt flach.
-
-          return false ;
-        }
+      refineImmediate (r) ;
+      return true ;
+    }
+    else
+    {
+      return false ;
     }
   }
 

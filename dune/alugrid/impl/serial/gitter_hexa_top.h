@@ -270,7 +270,6 @@ namespace ALUGrid
   template < class A > class Hface4Top : public A
   {
     public :
-      using A::twist;
       using A::myvertex;
       using A::myhedge;
 
@@ -303,9 +302,9 @@ namespace ALUGrid
         return this->myvertex(0)->indexManagerStorage().get( IndexManagerStorageType::IM_Faces ); }
 
       // constructor for macro faces
-      inline Hface4Top (int,myhedge_t *,int,myhedge_t *,int,myhedge_t *,int,myhedge_t *,int);
+      inline Hface4Top (int,myhedge_t *,myhedge_t *,myhedge_t *,myhedge_t *);
       // constructor for refined faces
-      inline Hface4Top (int,myhedge_t *,int,myhedge_t *,int,myhedge_t *,int,myhedge_t *,int, int nChild );
+      inline Hface4Top (int,myhedge_t *,myhedge_t *,myhedge_t *,myhedge_t *, int nChild );
       virtual ~Hface4Top ();
       innervertex_t * subvertex (int);
       const innervertex_t * subvertex (int) const;
@@ -328,7 +327,7 @@ namespace ALUGrid
 
     public :
       virtual myrule_t getrule () const;
-      virtual bool refine (myrule_t,int);
+      virtual bool refine (myrule_t,bool);
       virtual void refineImmediate (myrule_t);
       virtual bool coarse ();
     public :
@@ -370,7 +369,7 @@ namespace ALUGrid
   template < class A > class Hbnd4Top : public A
   {
     public:
-      using A::twist;
+      using A::isRear;
       using A::myhface4;
       using A::subface;
 
@@ -402,10 +401,10 @@ namespace ALUGrid
       inline void append (innerbndseg_t *);
     public :
       // constructor for refinement
-      inline Hbnd4Top (int,myhface4_t *,int, innerbndseg_t *, Gitter::helement_STI *, int);
+      inline Hbnd4Top (int,myhface4_t *, bool, innerbndseg_t *, Gitter::helement_STI *, int);
 
       // constructor for macro element in the serial case
-      inline Hbnd4Top (int,myhface4_t *,int, const bnd_t bt );
+      inline Hbnd4Top (int,myhface4_t *, bool, const bnd_t bt );
 
       virtual ~Hbnd4Top ();
       using A::refineBalance;
@@ -430,7 +429,7 @@ namespace ALUGrid
 
   template < class A > class HexaTop : public A {
     public :
-      using A::twist;
+      using A::isRear;
       using A::myvertex;
       using A::myhedge;
       using A::myhface4;
@@ -465,19 +464,19 @@ namespace ALUGrid
       IndexManagerType & indexManager() {
         return this->myvertex(0)->indexManagerStorage().get( IndexManagerStorageType::IM_Elements ); }
 
-      myhedge_t * subedge (int,int);
-      const myhedge_t * subedge (int,int) const;
+      myhedge_t * subedge (int,int,int);
+      const myhedge_t * subedge (int,int,int) const;
       myhface4_t * subface (int,int);
       const myhface4_t * subface (int,int) const;
 
     public:
       // Constructor for macro elements
-      HexaTop (int,myhface4_t *,int,myhface4_t *,int,myhface4_t *,int,
-               myhface4_t *,int,myhface4_t *,int,myhface4_t *,int);
+      HexaTop (int,myhface4_t *,bool,myhface4_t *,bool,myhface4_t *,bool,
+               myhface4_t *,bool,myhface4_t *,bool,myhface4_t *,bool);
 
       // constructor for refinement
-      HexaTop (int,myhface4_t *,int,myhface4_t *,int,myhface4_t *,int,
-               myhface4_t *,int,myhface4_t *,int,myhface4_t *,int,
+      HexaTop (int,myhface4_t *,bool,myhface4_t *,bool,myhface4_t *,bool,
+               myhface4_t *,bool,myhface4_t *,bool,myhface4_t *,bool,
                innerhexa_t * up, int nChild , double vol );
 
       virtual ~HexaTop ();
@@ -519,9 +518,6 @@ namespace ALUGrid
       int  backup  (ObjectStream&) const;
       void restore (ObjectStream&);
 
-      int  vertexTwist ( const int twst, const int vx ) const  ;
-      int calculateFace2Twist( const int vxIndex, const myhface4_t* subFace ) const ;
-      int calculateFace3Twist( const int (&vx)[4], const myhface4_t* subFace, const int thirdVx ) const ;
       bool checkHexa( const innerhexa_t* hexa, const int  ) const;
 
       // change coordinates of this element (for ghost elements only)
@@ -570,7 +566,7 @@ namespace ALUGrid
 
   template < class A > class Periodic4Top : public A {
     public:
-      using A::twist;
+      using A::isRear;
       using A::myhface4;
 
     protected :
@@ -612,8 +608,8 @@ namespace ALUGrid
 
     public:
 
-      Periodic4Top (int,myhface4_t *,int,myhface4_t *,int, const bnd_t (&bt)[ 2 ] );
-      Periodic4Top (int,myhface4_t *,int,myhface4_t *,int,
+      Periodic4Top (int,myhface4_t *,bool,myhface4_t *,bool, const bnd_t (&bt)[ 2 ] );
+      Periodic4Top (int,myhface4_t *,bool,myhface4_t *,bool,
                     innerperiodic4_t * up, int nChild );
       virtual ~Periodic4Top ();
 
@@ -689,7 +685,10 @@ namespace ALUGrid
   {
     //std::cout << a << b << std::endl;
     this->setIndex( indexManager().getIndex() );
-    if( ( a->is2d() ) != ( b->is2d() ) ) this->set2dFlag();
+    if( ( a->is2d() ) != ( b->is2d() ) )
+    {
+      this->set2dFlag();
+    }
     //dont assert length > 0 for fake edges
     else alugrid_assert ( isRealLine() );
     return;
@@ -860,13 +859,13 @@ namespace ALUGrid
   template < class A > typename Hface4Top < A >::myhedge_t *
   Hface4Top < A >::subedge (int i,int j) {
     alugrid_assert (j == 0 || j == 1);
-    return this->myhedge (i)->subedge (j ? 1 - this->twist(i) : this->twist(i));
+    return this->myhedge (i)->subedge (j);
   }
 
   template < class A > const typename Hface4Top < A >::myhedge_t *
   Hface4Top < A >::subedge (int i,int j) const {
     alugrid_assert (j == 0 || j == 1);
-    return this->myhedge (i)->subedge (j ? 1 - this->twist(i) : this->twist(i));
+    return this->myhedge (i)->subedge (j);
   }
 
   template < class A > inline typename Hface4Top < A >::innervertex_t *
@@ -914,9 +913,9 @@ namespace ALUGrid
   }
 
   template < class A > inline Hface4Top < A >::
-  Hface4Top (int l, myhedge_t * e0, int t0, myhedge_t * e1, int t1,
-    myhedge_t * e2, int t2, myhedge_t * e3, int t3 )
-    : A (e0, t0, e1, t1, e2, t2, e3, t3),
+  Hface4Top (int l, myhedge_t * e0, myhedge_t * e1,
+    myhedge_t * e2, myhedge_t * e3 )
+    : A (e0, e1, e2, e3),
     _bbb (0), _inner (0),
     _rule (myrule_t::nosplit),
     _lvl (l),
@@ -926,9 +925,9 @@ namespace ALUGrid
     if( !( e0->is2d() ) ) this->reset2dFlag();
   }
 
-  template < class A > inline Hface4Top < A >::Hface4Top (int l, myhedge_t * e0, int t0, myhedge_t * e1, int t1,
-    myhedge_t * e2, int t2, myhedge_t * e3, int t3,int nChild )
-    : A (e0, t0, e1, t1, e2, t2, e3, t3),
+  template < class A > inline Hface4Top < A >::Hface4Top (int l, myhedge_t * e0, myhedge_t * e1,
+    myhedge_t * e2, myhedge_t * e3,int nChild )
+    : A (e0, e1, e2, e3),
     _bbb (0), _inner (0),
     _rule (myrule_t::nosplit),
     _lvl (l),
@@ -1018,9 +1017,9 @@ namespace ALUGrid
 
 
   template < class A > inline Hbnd4Top < A >::
-  Hbnd4Top (int l, myhface4_t * f, int i,
+  Hbnd4Top (int l, myhface4_t * f, bool isRear,
             innerbndseg_t * up, Gitter::helement_STI * gh, int gFace ) :
-    A (f, i), _bbb (0), _dwn (0), _up(up) ,
+    A (f, isRear), _bbb (0), _dwn (0), _up(up) ,
     _bt(_up->_bt)
   {
     // set level (declared in hbndseg4_GEO for memory reasons)
@@ -1052,8 +1051,8 @@ namespace ALUGrid
   }
 
   template < class A > inline Hbnd4Top < A >::
-  Hbnd4Top (int l, myhface4_t * f, int i, const bnd_t bt )
-    : A (f, i),
+  Hbnd4Top (int l, myhface4_t * f, bool isRear, const bnd_t bt )
+    : A (f, isRear),
       _bbb (0), _dwn (0), _up(0) ,
       _bt(bt)
   {

@@ -34,6 +34,8 @@ namespace ALUGrid
     enum { noVx     = (points == 4) ? 8 : 4 };
     // number of all non-internal points
     enum { noFaceVx = (points == 4) ? 4 : 1 };
+    // number of faces
+    enum { noFace   = (points == 4) ? 6 : 4 };
 
     static const signed char invalidFace = -111;
 
@@ -47,6 +49,9 @@ namespace ALUGrid
     // vertex idents of all not internal vertices
     int _vxface[noFaceVx]; // 4 or 16 bytes
 
+    // flags isRear for all faces
+    IsRearFlag _isRear;
+
     // face number of internal face
     signed char _fce; // 1 byte
 
@@ -54,9 +59,13 @@ namespace ALUGrid
     SimplexTypeFlag _simplexTypeFlag; // 1 byte
 
     // do not allow copying
-    MacroGhostInfoStorage(const MacroGhostInfoStorage & );
+    MacroGhostInfoStorage(const MacroGhostInfoStorage & ) = delete;
 
-    MacroGhostInfoStorage() : _fce( invalidFace ), _simplexTypeFlag() {}
+    MacroGhostInfoStorage()
+      : _fce( invalidFace ),
+        _simplexTypeFlag()
+    {
+    }
   public:
     // destructor
     virtual ~MacroGhostInfoStorage () {}
@@ -73,6 +82,12 @@ namespace ALUGrid
     {
       alugrid_assert ( _fce != invalidFace );
       return _vx;
+    }
+
+    // return isRear flags
+    const IsRearFlag& isRear () const
+    {
+      return _isRear;
     }
 
     // return reference to vector with non-internal vertex idents
@@ -121,7 +136,7 @@ namespace ALUGrid
     typedef MacroGhostInfoStorage< 1 > BaseType;
     enum { points = 1 };
     // do not copy
-    MacroGhostInfoTetra(const MacroGhostInfoTetra&);
+    MacroGhostInfoTetra(const MacroGhostInfoTetra&) = delete;
   public:
     // create storage by reading data from stream
     explicit MacroGhostInfoTetra(ObjectStream& os)
@@ -164,7 +179,7 @@ namespace ALUGrid
     typedef MacroGhostInfoStorage< 4 > BaseType;
     enum { points = 4 };
     // no copying
-    MacroGhostInfoHexa(const MacroGhostInfoHexa&);
+    MacroGhostInfoHexa(const MacroGhostInfoHexa&) = delete;
 
     // read internal data from stream
     void readData(ObjectStream& os)

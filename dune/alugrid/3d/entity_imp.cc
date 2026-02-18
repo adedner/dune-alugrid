@@ -8,7 +8,7 @@
 
 // this include is needed because of the GridFactory being used in the
 // geometryInFather method
-#include "gridfactory.cc"
+#include "gridfactory_imp.cc"
 
 #include <dune/alugrid/common/declaration.hh>
 #include "alu3dinclude.hh"
@@ -295,7 +295,7 @@ namespace Dune {
   ALU3dGridEntity< cd, dim, GridImp >::geometry () const
   {
     if( ! geo_.valid() )
-      geo_.buildGeom( getItem(), seed_.twist() );
+      geo_.buildGeom( getItem() );
     return Geometry( geo_ );
   }
 
@@ -385,7 +385,7 @@ namespace Dune {
 
     static int subIndex(const IMPLElemType &elem, int i)
     {
-      return elem.myvertex( ElemTopo::dune2aluVertex(i) )->getIndex(); // element topo
+      return elem.myvertex( i )->getIndex(); // element topo
     }
   };
 
@@ -395,8 +395,7 @@ namespace Dune {
   {
     static int subIndex(const IMPLElemType &elem, int i)
     {
-      // is specialised for each element type and uses
-      // the dune2aluFace mapping and also specialised for dim 2
+      // is specialised for each element type
       return (ALU3dGridFaceGetter< Comm >::getFace(elem,i))->getIndex();
     }
   };
@@ -413,7 +412,7 @@ namespace Dune {
       if(dim == 3)
       {
         // get hedge1 corresponding to dune reference element and return number
-        return elem.myhedge( ElemTopo::dune2aluEdge(i) )->getIndex();
+        return elem.myhedge( i )->getIndex();
       }
       else if (dim == 2)
       {
@@ -423,7 +422,7 @@ namespace Dune {
            ++i;
         }
         // get vertex corresponding to dune reference element and return number
-        return elem.myvertex( ElemTopo::dune2aluVertex(i) )->getIndex();
+        return elem.myvertex( i )->getIndex();
       }
     }
   };
@@ -450,8 +449,6 @@ namespace Dune {
   template<int dim, class GridImp>
   alu_inline int ALU3dGridEntity<0,dim,GridImp> :: subIndex (int i, unsigned int codim ) const
   {
-    typedef ElementTopologyMapping<GridImp::elementType> ElemTopo;
-
     alugrid_assert (item_ != 0);
     switch (codim)
     {
@@ -463,7 +460,7 @@ namespace Dune {
           if(GridImp::dimension == 3)
           {
             // get hedge1 corresponding to dune reference element and return number
-            return item_->myhedge( ElemTopo::dune2aluEdge(i) )->getIndex();
+            return item_->myhedge( i )->getIndex();
           }
           else // if (GridImp::dimension == 2)
           {
@@ -474,10 +471,10 @@ namespace Dune {
               ++i;
             }
             // get myvertex corresponding to dune reference element and return number
-            return item_->myvertex( ElemTopo::dune2aluVertex( i ) )->getIndex();
+            return item_->myvertex( i )->getIndex();
           }
       case 3:
-        return item_->myvertex( ElemTopo::dune2aluVertex( i ) )->getIndex();
+        return item_->myvertex( i )->getIndex();
       default :
         alugrid_assert (false);
         abort();
@@ -535,13 +532,8 @@ namespace Dune {
     {
       return EntityImp( EntitySeed(
                *ALU3dGridFaceGetter< typename GridImp::MPICommunicatorType >::getFace( item, i ),
-               level, static_cast< int >( twist( item, i ) ) )
+               level,  0 )
              );
-    }
-
-    static Twist twist ( const Item &item, int i )
-    {
-      return Twist( Topo::duneFaceTwist( i ) ) * Twist( item.twist( Topo::dune2aluFace( i ) ) );
     }
   };
 
@@ -572,12 +564,11 @@ namespace Dune {
       typedef typename ALU3dImplTraits< GridImp::elementType, typename GridImp::MPICommunicatorType>::GEOEdgeType Edge;
       typedef typename ALU3dImplTraits< GridImp::elementType, typename GridImp::MPICommunicatorType>::GEOFaceType Face;
 
-      ALUTwist< Topo::numVerticesPerFace, 2 > faceTwist( item.twist( Topo::duneEdgeMap( i ).first ) );
+      ALUTwist< Topo::numVerticesPerFace, 2 > faceTwist( 0 );
       const Face &face = *item.myhface( Topo::duneEdgeMap( i ).first );
-      const int j = faceTwist.apply( Topo::duneEdgeMap( i ).second, 1 );
 
-      const Edge &edge = *face.myhedge( j );
-      const int twist = (int( !faceTwist.positive() )^face.twist( j ));
+      const Edge &edge = *face.myhedge( Topo::duneEdgeMap( i ).second );
+      const int twist = 0;
 
       return EntityImp( EntitySeed( edge, level, twist ) );
     }
@@ -619,7 +610,7 @@ namespace Dune {
         ++i;
       }
       return
-        EntityImp( EntitySeed( *item.myvertex( Topo::dune2aluVertex(i) ), level )); // element topo
+        EntityImp( EntitySeed( *item.myvertex( i ), level )); // element topo
     }
 
     static Twist twist ( const Item &item, int i ) { return Twist(); }
@@ -644,7 +635,7 @@ namespace Dune {
     static Entity
     entity ( int level, const ElementType &entity, const Item &item, int i )
     {
-      return EntityImp( EntitySeed( *item.myvertex(Topo::dune2aluVertex(i)), level ) );
+      return EntityImp( EntitySeed( *item.myvertex(i), level ) );
     }
 
     static Twist twist ( const Item &item, int i ) { return Twist(); }
@@ -768,14 +759,11 @@ namespace Dune {
       if( face.isBorder() ) continue ;
 
       // check both
-      const HasFaceType * outerElement = face.nb.front().first;
+      const HasFaceType * outerElement = face.nb.rear().first;
       // if we got our own element, get other side
-      // the above is a bad test, as it does not take into account
-      // the situation of conforming refinement
-      // it is better to directly test the face twist
-      if( item_->twist(ElementTopologyMapping< GridImp::elementType >::dune2aluFace(i) ) > -1 )
+      if( item_->isRear(i) )
       {
-        outerElement = face.nb.rear().first;
+        outerElement = face.nb.front().first;
       }
 
       alugrid_assert ( outerElement );

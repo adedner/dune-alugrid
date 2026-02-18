@@ -6,7 +6,7 @@
 
 #include "gitter_sti.h"
 #include "gitter_hexa_top.h"
-#include "mapp_tetra_3d.h"
+#include "mappings.hh"
 
 namespace ALUGrid
 {
@@ -16,11 +16,10 @@ namespace ALUGrid
   inline bool checkFace ( const A* fce, const int child )
   {
     A* face = const_cast< A* > (fce);
-    const int vxs[ 3 ][ 2 ] = { { 0, 1 }, { 1, 2 }, { 2, 0 } };
+    const int vxs[ 3 ][ 2 ] = { { 0, 1 }, { 0, 2 }, { 1,2 } };
     bool found = true;
     for( int i=0; i<3; ++i )
     {
-      const int twst = face->twist( i );
       // check vertices of the face
       for( int j=0; j<2; ++j )
       {
@@ -42,10 +41,7 @@ namespace ALUGrid
         }
       }
 
-      if( ! ( face->myvertex( i ) == face->myhedge( i )->myvertex( twst ) &&
-              face->myvertex( (i+1)%3 ) == face->myhedge( i )->myvertex( 1-twst ) ) )
-        found = false;
-
+//TODO write a check here
       for( int j=1; j<3; ++j )
       {
         int f = (i+j)%3;
@@ -63,7 +59,6 @@ namespace ALUGrid
   template < class A > class Hface3Top : public A
   {
     public :
-      using A :: twist;
       using A :: myhedge;
       using A :: myvertex;
 
@@ -95,14 +90,14 @@ namespace ALUGrid
       inline const myhedge_t * subedge (int,int) const;
       void split_e01 ();
       void split_e12 ();
-      void split_e20 ();
+      void split_e02 ();
       void split_iso4 ();
 
     public :
       // constructor for macro elements
-      inline Hface3Top (int,myhedge_t *,int,myhedge_t *,int,myhedge_t *,int );
+      inline Hface3Top (int,myhedge_t *,myhedge_t *,myhedge_t * );
       // constructor for refined elements
-      inline Hface3Top (int,myhedge_t *,int,myhedge_t *,int,myhedge_t *,int, int nChild );
+      inline Hface3Top (int,myhedge_t *,myhedge_t *,myhedge_t *, int nChild );
       virtual inline ~Hface3Top ();
       innervertex_t * subvertex (int);
       const innervertex_t * subvertex (int) const;
@@ -123,7 +118,7 @@ namespace ALUGrid
       void append (innerface_t * f);
     public:
       virtual myrule_t getrule () const;
-      virtual bool refine (myrule_t,int);
+      virtual bool refine (myrule_t,bool);
       virtual void refineImmediate (myrule_t);
       virtual bool coarse ();
     public :
@@ -167,7 +162,7 @@ namespace ALUGrid
 
   template < class A > class Hbnd3Top : public A {
     public:
-      using A :: twist;
+      using A :: isRear;
       using A :: subface;
       using A :: myhface;
 
@@ -202,9 +197,9 @@ namespace ALUGrid
 
     public:
       // constructor for serial macro boundary elements
-      inline Hbnd3Top (int,myhface_t *,int, const bnd_t b );
+      inline Hbnd3Top (int,myhface_t *, bool, const bnd_t b );
       // constructor for children
-      inline Hbnd3Top (int, myhface_t *,int,
+      inline Hbnd3Top (int, myhface_t *, bool,
                        innerbndseg_t * up, const bnd_t b,
                        typename Gitter::helement_STI * gh, int gFace );
 
@@ -234,7 +229,7 @@ namespace ALUGrid
   template < class A > class TetraTop : public A
   {
     public :
-      using A :: twist;
+      using A :: isRear;
       using A :: myhface;
       using A :: myvertex;
       using A :: myGrid;
@@ -275,14 +270,14 @@ namespace ALUGrid
               tetra->split_e01();
             else if ( rule == myrule_t :: e12 )
               tetra->split_e12();
-            else if ( rule == myrule_t :: e20 )
-              tetra->split_e20();
+            else if ( rule == myrule_t :: e02 )
+              tetra->split_e02();
             else if ( rule == myrule_t :: e23 )
               tetra->split_e23();
-            else if ( rule == myrule_t :: e30 )
-              tetra->split_e30();
-            else if ( rule == myrule_t :: e31 )
-              tetra->split_e31();
+            else if ( rule == myrule_t :: e03 )
+              tetra->split_e03();
+            else if ( rule == myrule_t :: e13 )
+              tetra->split_e13();
             else
             {
               std::cerr << "ERROR (FATAL): Wrong refinement rule." << std::endl;
@@ -293,7 +288,6 @@ namespace ALUGrid
 
         const CallSplitIF* _caller;
         unsigned char _faces[ 2 ];
-        unsigned char _vertices[ 2 ];
         face3rule_t _faceRules[ 2 ];
 
       private:
@@ -309,45 +303,21 @@ namespace ALUGrid
         {
           alugrid_assert ( rule == myrule_t :: e01 ||
                   rule == myrule_t :: e12 ||
-                  rule == myrule_t :: e20 ||
+                  rule == myrule_t :: e02 ||
                   rule == myrule_t :: e23 ||
-                  rule == myrule_t :: e30 ||
-                  rule == myrule_t :: e31  );
+                  rule == myrule_t :: e03 ||
+                  rule == myrule_t :: e13  );
 
           static const BisectionInfo bisectionInfo[ 6 ] = {
               BisectionInfo( myrule_t :: e01 ),
+              BisectionInfo( myrule_t :: e02 ),
+              BisectionInfo( myrule_t :: e03 ),
               BisectionInfo( myrule_t :: e12 ),
-              BisectionInfo( myrule_t :: e20 ),
-              BisectionInfo( myrule_t :: e23 ),
-              BisectionInfo( myrule_t :: e30 ),
-              BisectionInfo( myrule_t :: e31 ) };
+              BisectionInfo( myrule_t :: e13 ),
+              BisectionInfo( myrule_t :: e23 ) };
           return bisectionInfo[ int(rule) - 2 ];
         }
 
-        static face3rule_t calculateRule( const myhface_t* face,
-                                          const myvertex_t* vx0,
-                                          const myvertex_t* vx1 )
-        {
-          static const face3rule_t rules[ 3 ] = { face3rule_t :: e01, face3rule_t :: e12, face3rule_t :: e20 };
-
-          alugrid_assert ( checkFace( face, face->nChild() ) );
-
-          for(int j=0; j<3; ++j )
-          {
-            for( int twist=0; twist<2; ++twist )
-            {
-              if( face->myhedge( j )->myvertex( twist ) == vx0  &&
-                  face->myhedge( j )->myvertex( 1-twist ) == vx1  )
-              {
-                return rules[ j ];
-              }
-            }
-          }
-
-          alugrid_assert ( false );
-          abort();
-          return rules[ 0 ];
-        }
 
         static bool refineFaces( innertetra_t* tetra, const myrule_t& rule )
         {
@@ -356,13 +326,12 @@ namespace ALUGrid
           {
             myhface_t* face = tetra->myhface( info._faces[ i ] );
 
-            const face3rule_t faceRule = calculateRule( face,
-                tetra->myvertex( info._vertices[ 0 ] ), tetra->myvertex( info._vertices[ 1 ] ) );
+            const face3rule_t faceRule = info._faceRules[i];
 
-           // std::cout << "Calculated Face  Rule: "<< faceRule << " with TetraRule: " << rule <<  " for " << tetra << " and " << face << std::endl;
+            //std::cout << "Calculated Face  Rule: "<< faceRule << " with TetraRule: " << rule <<  " for " << tetra << " and " << face << std::endl;
 
             // check refinement of faces
-            if (! face->refine( faceRule, tetra->twist( info._faces[ i ] ) ) ) return false;
+            if (! face->refine( faceRule, tetra->isRear( info._faces[ i ] ) ) ) return false;
           }
           return true;
         }
@@ -375,9 +344,8 @@ namespace ALUGrid
           {
             myhface_t* face = tetra->myhface( info._faces[ i ] );
 
-            const face3rule_t faceRule = calculateRule( face,
-                tetra->myvertex( info._vertices[ 0 ] ), tetra->myvertex( info._vertices[ 1 ] ) );
-
+            const face3rule_t faceRule = info._faceRules[i];
+         //   std::cout << "Calculated Face  Rule: "<< faceRule << " with TetraRule: " << rule <<  " for " << tetra << " and " << face << std::endl;
             face->refineImmediate ( faceRule );
           }
 
@@ -444,9 +412,6 @@ namespace ALUGrid
       inline void append (innertetra_t * h);
 
       bool checkTetra( const innertetra_t* tetra, const int  ) const;
-      int vertexTwist( const int, const int ) const;
-      int calculateFace2Twist( const int vx, const myhface_t* ) const;
-      int calculateFace3Twist( const int (&vx)[2], const myhface_t*, const int ) const;
 
       // change coordinates of this element (for ghost elements only)
       void changeVertexCoordinates( const int face, const std::array< std::array<alucoord_t,3>, 8 >& newCoords, const double volume )
@@ -475,7 +440,8 @@ namespace ALUGrid
         }
 
         // set vertex opposite to face
-        this->myvertex( face )->setCoordinates( newCoords[ 3 ] );
+        const int oppVx = Gitter::Geometric::tetra_GEO::oppositeVertex[ face ];
+        this->myvertex( oppVx )->setCoordinates( newCoords[ 3 ] );
 
         _volume = volume;
       }
@@ -484,19 +450,17 @@ namespace ALUGrid
       {
         // use std::abs to compute volume because in some of the 2d cases this
         // could be negative
-        return std::abs( quadraturTetra3D< VolumeCalc >(
-                            LinearMapping ( myvertex(0)->Point(),
-                                            myvertex(1)->Point(),
-                                            myvertex(2)->Point(),
-                                            myvertex(3)->Point() ) ).integrate1( 0.0 ) );
+        LinearMapping<3,3> map;
+        map.buildMapping(myvertex(0)->Point(),myvertex(1)->Point(),myvertex(2)->Point(),myvertex(3)->Point());
+        return std::abs(1./6. * map.det(LinearMapping<3,3>::map_t(0)));
       }
 
       // the element type is obtained from the level of the element
       // under the assumption that on level 0 all elements have type 0
       unsigned char elementType () const { return ((this->macroSimplexTypeFlag() + _lvl) % 3); }
 
-      // sets the new _vxMap for this tetra
-      void setNewMapping( innertetra_t*, innertetra_t*, innerface_t*, const int, const int );
+      // sets the new edges for this tetra
+      void setNewMapping( innertetra_t*, innertetra_t*, innerface_t* );
 
     protected:
       void setIndexAndFlag();
@@ -508,31 +472,29 @@ namespace ALUGrid
 
       const unsigned char _lvl;  // 1 byte
       signed char _nChild;       // 1 byte
-      unsigned char _vxMap[ 4 ]; // 4 byte
       myrule_t _req, _rule;      // 2 byte   = 8 byte
-
-      // true if bisection after Stevenson is used, otherwise ALBERTA refinement
-      enum { stevensonRefinement_ = false };
 
     private :
       bool checkRule( const myrule_t rule ) const
       {
-        // this does not work, when children are fliped, see setNewMapping
+        // note that children are flipped
+        // only edges opposite of the recent vertex introduced are possible
+        // the edge of the newface that is in the father is not possible
         static const myrule_t possibleRules0[ 6 ][ 2 ] = {
-            { myrule_t :: e20, myrule_t :: e30 }, // possible rules for e01 in child 0
-            { myrule_t :: e01, myrule_t :: e31 }, // possible rules for e12 in child 0
-            { myrule_t :: e30, myrule_t :: e01 }, // possible rules for e20 in child 0
-            { myrule_t :: e30, myrule_t :: e31 }, // possible rules for e23 in child 0
-            { myrule_t :: e20, myrule_t :: e01 }, // possible rules for e30 in child 0
-            { myrule_t :: e01, myrule_t :: e12 }  // possible rules for e31 in child 0
+            { myrule_t :: e02, myrule_t :: e03 }, // possible rules for e01 in child 0
+            { myrule_t :: e03, myrule_t :: e01 }, // possible rules for e02 in child 0
+            { myrule_t :: e02, myrule_t :: e01 }, // possible rules for e03 in child 0
+            { myrule_t :: e01, myrule_t :: e13 }, // possible rules for e12 in child 0
+            { myrule_t :: e01, myrule_t :: e12 }, // possible rules for e13 in child 0
+            { myrule_t :: e02, myrule_t :: e12 }  // possible rules for e23 in child 0
           };
         static const myrule_t possibleRules1[ 6 ][ 2 ] = {
-            { myrule_t :: e31, myrule_t :: e12 }, // possible rules for e01 in child 1
-            { myrule_t :: e23, myrule_t :: e20 }, // possible rules for e12 in child 1
-            { myrule_t :: e12, myrule_t :: e23 }, // possible rules for e12 in child 1
-            { myrule_t :: e12, myrule_t :: e20 }, // possible rules for e23 in child 1
-            { myrule_t :: e31, myrule_t :: e23 }, // possible rules for e30 in child 1
-            { myrule_t :: e23, myrule_t :: e30 }  // possible rules for e31 in child 0
+            { myrule_t :: e13, myrule_t :: e12 }, // possible rules for e01 in child 1
+            { myrule_t :: e02, myrule_t :: e23 }, // possible rules for e02 in child 1
+            { myrule_t :: e13, myrule_t :: e03 }, // possible rules for e03 in child 1
+            { myrule_t :: e23, myrule_t :: e02 }, // possible rules for e12 in child 1
+            { myrule_t :: e13, myrule_t :: e03 }, // possible rules for e13 in child 1
+            { myrule_t :: e13, myrule_t :: e03 }  // possible rules for e23 in child 1
           };
 
         if( _up )
@@ -552,44 +514,252 @@ namespace ALUGrid
           return true;
       }
 
+      // Only checks 3d!
       void splitInfo( const myrule_t rule ) const
       {
-  #if 0
-        cout << endl << "Split tetra " << this<< endl;
-        cout << " ( " << this->getIndex() << ", ch" << int( _nChild) << ") with rule " << rule << "  ";
+        /*
+        std::cout << std::endl << "Split tetra " << this<< std::endl;
+        std::cout << " ( " << this->getIndex() << ", ch" << int( _nChild) << ") with rule " << rule << "  ";
         if( _up )
-          cout << "father (" << _up->getIndex() << ", ch" << int( _up->_nChild) << ") rule = " << _up->_rule << endl;
-        cout << endl;
+          std::cout << "father (" << _up->getIndex() << ", ch" << int( _up->_nChild) << ") rule = " << _up->_rule << std::endl;
+        std::cout << std::endl;
         const bool chRule = checkRule( rule );
         if( ! chRule )
         {
-          cout << "Map = ( ";
-          for(int i=0; i<4; ++i )
-            cout << int(_vxMap[ i ]) << " ";
-          cout << " ) " << endl;
-
-          cout << rule << " not valid " << endl;
+          std::cout << rule << " not valid " << std::endl;
           //alugrid_assert ( false );
-        }
-  #endif
+        }*/
       }
 
-      myrule_t suggestRule ()  const
+      myrule_t suggestRule ( bool longest = false )  const
       {
-        // Stevenson refinement: edge 0--3
-        // ALBERTA refinement:   edge 0--1
-        // 2d refinement: edge 1--2
-        int  vxFirst = this->is2d() ? 1 : 0 ;
-        int  vxSecond = stevensonRefinement_ ? 3 : (this->is2d() ? 2 : 1) ;
-        static const myrule_t rules [ 4 ][ 4 ] = {
-          { myrule_t :: crs , myrule_t :: e01, myrule_t :: e20, myrule_t :: e30 },
-          { myrule_t :: e01 , myrule_t :: crs, myrule_t :: e12, myrule_t :: e31 },
-          { myrule_t :: e20 , myrule_t :: e12, myrule_t :: crs, myrule_t :: e23 },
-          { myrule_t :: e30 , myrule_t :: e31, myrule_t :: e23, myrule_t :: crs }
-        };
-        alugrid_assert ( int(_vxMap[ vxFirst ]) != int(_vxMap[ vxSecond ]) );
-        return rules[ int(_vxMap[ vxFirst ]) ][ int(_vxMap[ vxSecond ]) ];
+        // implementation of longest edge refinement
+        if(longest)
+        {
+          myrule_t rule = myrule_t::e01;
+          std::multimap<double, myrule_t> rules;
+          int i = (this->is2d()) ? 1 : 0;
+          int rulenumber = (this->is2d()) ? 5 : 2 ;
+
+          for(; i<4; ++i)
+          {
+            const alucoord_t (&p0)[ 3 ] = myvertex(i)->Point();
+            for(int j=i+1; j < 4; ++j)
+            {
+              //std::cout << i << j << rulenumber << " "  ;
+              const alucoord_t (&p1)[ 3 ] = myvertex(j)->Point();
+              double sum = 0;
+
+              for(int k=0; k<3; ++k)
+              {
+                double diff = p0[k] - p1[k];
+                sum += (diff * diff );
+              }
+              rules.insert(std::make_pair(sum, static_cast<myrule_t>(rulenumber)));
+              rulenumber++;
+            }
+          }
+          // if there are multiple edges of largest size, take the one with bigger rule number
+          auto rIt = rules.rbegin();
+          double maxLength = rIt->first;
+          rule = (rules.rbegin())->second;
+          rIt++;
+          while( std::abs( rIt->first - maxLength ) < 1e-8 )
+          {
+            if(rIt->second < rule )
+              rule = rIt->second;
+            rIt++;
+          }
+
+          //std::cout << rule <<std::endl;
+          alugrid_assert( rule.bisection() );
+          return rule;
+        }
+        //implementation of NVB bisection refinement
+        else
+        {
+          //specialization for the 2d case
+          //always thae the edge that is opposite to the most recent introduced vertex
+          if( this->is2d() )
+          {
+            if( _up )
+            {
+              switch( _up->getrule() ){
+                case (myrule_t :: e12):
+                  if(this->nChild() == 0)
+                    return myrule_t :: e13;
+                  if(this->nChild() == 1)
+                    return myrule_t :: e23;
+                  break;
+                case (myrule_t :: e13):
+                  if(this->nChild() == 0)
+                    return myrule_t :: e12;
+                  if(this->nChild() == 1)
+                    return myrule_t :: e13;
+                  break;
+                case (myrule_t :: e23):
+                  if(this->nChild() == 0)
+                    return myrule_t :: e12;
+                  if(this->nChild() == 1)
+                    return myrule_t :: e13;
+                  break;
+                default:
+                  alugrid_assert(this->nChild() == 0 || this->nChild() == 1);
+                  std::cerr << "ERROR: "<< __FILE__ << __LINE__ << ":  Refinement Edge must not contain Vertex 0" << std::endl;
+                  alugrid_assert(false);
+                  std::abort();
+                  return myrule_t();
+              }
+            }
+            else
+            {
+              return suggestRule(true);
+            }
+          }
+          //3d NVB specialization
+          // This is based on the following property of NVB
+          // Once a vertex is part of a refinement edge it is always part of the refinement edge in all descendants that contain it
+          // Now we inspect the refinement edge of both father element and grandfather and choose the refinement edge accordingly
+          else
+          {
+            // if  we have a grandfather
+            if( _lvl > 1 )
+            {
+              myrule_t grandFatherRule = _up->_up->getrule();
+              myrule_t fatherRule = _up->getrule();
+              int fatherChild = _up->nChild();
+              int thisChild = this->nChild();
+              // vertices of the refinement edge - e.g. e03 -> 0 in child 0 and 3 in child 1
+              const int refEdgeVertices [ 6 ][ 2 ] = { { 0, 1}, {0, 2}, {0,3}, {1,2}, {1,3}, {2,3} };
+              // local index of new vertex - e.g. e03 -> 3 in child 0 and 2 in child 1
+              // for child 0 it is always the other vertex of the refinement edge
+              const int newVertices [ 6 ] [ 2 ] = { {1,0}, {2,1}, {3,2}, {2,1}, {3,2}, {3,2} };
+              // choose rule based on vertices that are present
+              const myrule_t ruleChoicePres  [ 4 ] [ 4 ] = { { -1, myrule_t :: e01, myrule_t :: e02, myrule_t :: e03},
+                                                         { myrule_t :: e01, -1, myrule_t :: e12, myrule_t :: e13},
+                                                         { myrule_t :: e02, myrule_t :: e12, -1, myrule_t :: e23},
+                                                         { myrule_t :: e03, myrule_t :: e13, myrule_t :: e23, -1} };
+              // choose rule based on vertices that are not present
+              const myrule_t ruleChoice  [ 4 ] [ 4 ] = { { -1, myrule_t :: e23, myrule_t :: e13, myrule_t :: e12},
+                                                         { myrule_t :: e23, -1, myrule_t :: e03, myrule_t :: e02},
+                                                         { myrule_t :: e13, myrule_t :: e03, -1, myrule_t :: e01},
+                                                         { myrule_t :: e12, myrule_t :: e02, myrule_t :: e01, -1} };
+              // If elementType == 0 or 2 then the grandfather was of type  0 or 11
+              // this is the easier case. Always refine the edge that is still present from the grandfather.
+              if( elementType() == 2 || elementType() == 0 )
+              {
+                int newFromGrandFather = newVertices[int(grandFatherRule) - 2][fatherChild];
+                int newFromFather = newVertices[int(fatherRule) - 2][thisChild];
+                //We may have to adjust the grandFathervertex, if the child 1 has rotated
+                if( thisChild == 1)
+                {
+                  //e02 maps 1->0
+                  if(fatherRule == myrule_t::e02 && newFromGrandFather == 1) newFromGrandFather = 0;
+                  //e03 maps 1->0 and 2->1
+                  else if (fatherRule == myrule_t::e03 && newFromGrandFather <=2 ) newFromGrandFather -= 1;
+                  //e13 maps 2->1
+                  else if (fatherRule == myrule_t::e13 && newFromGrandFather ==2 ) newFromGrandFather -= 1;
+                }
+                //Now we just take the edge, that does not include any of these two vertices
+                return ruleChoice[newFromGrandFather][newFromFather];
+              }
+              //case elementType == 1 (grandfather =2 ) behaves differently if the child is bisectionwise child 1
+              //the refinement edge contains the vertex created in the grandfather and
+              //the vertex of the father refinement edge, that is contained in the child
+              else
+              {
+                //First we need to find out, whether we have vertices of the refinement edge of the grandfather
+                int refEdgeGrandFatherIndex0 = _up->_up->myvertex(refEdgeVertices[int(grandFatherRule) - 2][0])->getIndex();
+                int refEdgeGrandFatherIndex1 = _up->_up->myvertex(refEdgeVertices[int(grandFatherRule) - 2][1])->getIndex();
+                int newFromGrandFather = newVertices[int(grandFatherRule) - 2][fatherChild];
+                int newFromFather = newVertices[int(fatherRule) - 2][thisChild];
+                int refEdgeFromFather = refEdgeVertices[int(fatherRule) - 2][thisChild];
+                //We may have to adjust the grandFathervertex, if the child 1 has rotated
+                if( thisChild == 1)
+                {
+                  //e02 maps 1->0
+                  if(fatherRule == myrule_t::e02 && newFromGrandFather == 1) newFromGrandFather = 0;
+                  //e03 maps 1->0 and 2->1
+                  else if (fatherRule == myrule_t::e03 && newFromGrandFather <=2 ) newFromGrandFather -= 1;
+                  //e13 maps 2->1
+                  else if (fatherRule == myrule_t::e13 && newFromGrandFather ==2 ) newFromGrandFather -= 1;
+                }
+                bool child1 = true;
+                for(int i=0; i < 4 ; ++i)
+                {
+                  if( i == newFromFather || i == newFromGrandFather )
+                    continue;
+                  if( this->myvertex(i)->getIndex() == refEdgeGrandFatherIndex0 || this->myvertex(i)->getIndex() == refEdgeGrandFatherIndex1 )
+                  {
+                    child1 = false;
+                    break;
+                  }
+                }
+
+                return child1 ? ruleChoicePres[newFromGrandFather][refEdgeFromFather] : ruleChoice[newFromGrandFather][newFromFather];
+              }
+            }
+            //if we are macro
+            //The vertices are ordered in two disjoint sets V0,V1
+            //and V1 comes after V0
+            //the type is the size of V1 and the refinement edge is
+            //the first and last vertex of V0
+            //Example: Element: [0,1,2,3]
+            //type = 0 -> V1 = [] -> V0 = [0,1,2,3] -> refedge = 0--3
+            //type = 2 -> V1 = [2,3] -> V0 = [0,1] -> refedge = 0--1
+            else if( _lvl == 0 )
+            {
+              if(this->elementType() == 0)
+                return myrule_t :: e03;
+              if(this->elementType() == 1)
+                return myrule_t :: e02;
+              if(this->elementType() == 2)
+                return myrule_t :: e01;
+            }
+            // if we do not have a grandfather, we know the father rule depending on the type
+            else
+            {
+              alugrid_assert( _lvl == 1 );
+              if(this->elementType() == 1)
+              {
+                if (this->nChild() == 0)
+                  return myrule_t :: e02;
+                else
+                {
+                  alugrid_assert (this->nChild() == 1);
+                  return myrule_t :: e03;
+                }
+              }
+              if(this->elementType() == 2)
+              {
+                if (this->nChild() == 0)
+                  return myrule_t :: e01;
+                else
+                {
+                  alugrid_assert (this->nChild() == 1);
+                  return myrule_t :: e02;
+                }
+              }
+              if(this->elementType() == 0)
+              {
+                if (this->nChild() == 0)
+                  return myrule_t :: e03;
+                else
+                {
+                  alugrid_assert (this->nChild() == 1);
+                  return myrule_t :: e13;
+                }
+              }
+            }
+          }
+          //We should not get here
+          std::cerr << "ERRORO: "<< __FILE__ << __LINE__ << ":  suggestRule does not suggest a refinement rule" << std::endl;
+          alugrid_assert(false);
+          std::abort();
+          return myrule_t();
+        }
       }
+
 
       inline IndexManagerType & indexManager() {
         return this->myvertex(0)->indexManagerStorage().get( IndexManagerStorageType :: IM_Elements ); }
@@ -598,10 +768,10 @@ namespace ALUGrid
 
       void split_e01 ();
       void split_e12 ();
-      void split_e20 ();
+      void split_e02 ();
       void split_e23 ();
-      void split_e30 ();
-      void split_e31 ();
+      void split_e03 ();
+      void split_e13 ();
 
       void splitISO8 ();
       void splitIso4_2d();
@@ -614,11 +784,11 @@ namespace ALUGrid
       const myhface_t * subface (int i, int j) const;
     public:
       // constructor for refined elements
-      TetraTop (int,myhface_t *,int,myhface_t *,int,myhface_t *,int,
-                    myhface_t *,int,innertetra_t *up, int nChild, double vol);
+      TetraTop (int,myhface_t *,bool,myhface_t *,bool,myhface_t *,bool,
+                    myhface_t *,bool,innertetra_t *up, int nChild, double vol);
       // constructor for macro elements
-      TetraTop (int,myhface_t *,int,myhface_t *,int,
-                    myhface_t *,int,myhface_t *,int, SimplexTypeFlag );
+      TetraTop (int,myhface_t *,bool,myhface_t *,bool,
+                    myhface_t *,bool,myhface_t *,bool, SimplexTypeFlag );
       virtual ~TetraTop ();
       inline innertetra_t * up ();
       inline const innertetra_t * up () const;
@@ -637,7 +807,7 @@ namespace ALUGrid
       inline int nChild () const;
       inline double volume () const;
 
-      SimplexTypeFlag simplexTypeFlag () const { return SimplexTypeFlag( int((_vxMap[ 2 ] == 3 ) ? 0 : 1), this->macroSimplexTypeFlag()); }
+      SimplexTypeFlag simplexTypeFlag () const { return SimplexTypeFlag(0, this->macroSimplexTypeFlag()); }
     public :
       myrule_t getrule () const;
       myrule_t requestrule () const;
@@ -686,7 +856,7 @@ namespace ALUGrid
 
   template < class A > class Periodic3Top : public A {
     public:
-      using A :: twist;
+      using A :: isRear;
       using A :: myhface;
 
     protected :
@@ -694,8 +864,8 @@ namespace ALUGrid
       typedef typename A :: innervertex_t innervertex_t;
       typedef typename A :: inneredge_t   inneredge_t;
       typedef typename A :: innerface_t   innerface_t;
-      typedef typename A :: myhedge_t    myhedge_t;
-      typedef typename A :: myhface_t    myhface_t;
+      typedef typename A :: myhedge_t     myhedge_t;
+      typedef typename A :: myhface_t     myhface_t;
       typedef typename A :: myrule_t      myrule_t;
       typedef typename A :: balrule_t     balrule_t;
       typedef typename A :: bnd_t         bnd_t;
@@ -716,10 +886,9 @@ namespace ALUGrid
     private :
       void split_e01 ();
       void split_e12 ();
-      void split_e20 ();
-
+      void split_e02 ();
       void split_iso4 ();
-      void split_bisection (myrule_t r);
+      void split_bisection ();
     protected :
       myhedge_t * subedge (int,int);
       const myhedge_t * subedge (int,int) const;
@@ -732,9 +901,9 @@ namespace ALUGrid
       }
     public:
       // constructor for macro elements
-      inline Periodic3Top (int,myhface_t *,int,myhface_t *,int, const bnd_t (&bnd)[2] );
+      inline Periodic3Top (int,myhface_t *,bool,myhface_t *,bool, const bnd_t (&bnd)[2] );
       // construtor for refined elements
-      inline Periodic3Top (int,myhface_t *,int,myhface_t *,int, innerperiodic3_t * up, int nChild );
+      inline Periodic3Top (int,myhface_t *,bool,myhface_t *,bool, innerperiodic3_t * up, int nChild );
       virtual inline ~Periodic3Top ();
       inline innerperiodic3_t * up ();
       inline const innerperiodic3_t * up () const;
@@ -864,12 +1033,12 @@ namespace ALUGrid
 
   template < class A > inline typename Hface3Top < A > :: myhedge_t * Hface3Top < A > :: subedge (int i,int j) {
     alugrid_assert (j == 0 || j == 1);
-    return myhedge (i)->subedge (j ? 1 - twist(i) : twist(i));
+    return myhedge (i)->subedge (j);
   }
 
   template < class A > inline const typename Hface3Top < A > :: myhedge_t * Hface3Top < A > :: subedge (int i,int j) const {
     alugrid_assert (j == 0 || j == 1);
-    return myhedge (i)->subedge (j ? 1 - twist(i) : twist(i));
+    return myhedge (i)->subedge (j);
   }
 
   template < class A > inline typename Hface3Top < A > :: inneredge_t * Hface3Top < A > :: subedge (int n) {
@@ -913,9 +1082,9 @@ namespace ALUGrid
   // constructor called during refinement
   template < class A > inline Hface3Top < A > ::
   Hface3Top (int l, myhedge_t * e0,
-    int t0, myhedge_t * e1, int t1, myhedge_t * e2, int t2,
+    myhedge_t * e1, myhedge_t * e2,
     int nChild ) :
-    A (e0, t0, e1, t1, e2, t2),
+    A (e0, e1, e2),
     _bbb (0), _inner(0) ,
     _lvl (l),
     _nChild (nChild),
@@ -943,8 +1112,8 @@ namespace ALUGrid
   // constructor called while creating macro face
   template < class A > inline Hface3Top < A > ::
   Hface3Top (int l, myhedge_t * e0,
-    int t0, myhedge_t * e1, int t1, myhedge_t * e2, int t2) :
-    A (e0, t0, e1, t1, e2, t2),
+    myhedge_t * e1, myhedge_t * e2) :
+    A (e0, e1, e2),
     _bbb (0), _inner (0),
     _lvl (l),
     _nChild (0),
@@ -973,8 +1142,8 @@ namespace ALUGrid
 
   // serial macro bnd constructor
   template < class A > inline Hbnd3Top < A > ::
-  Hbnd3Top (int l, myhface_t * f, int i, const bnd_t bt) :
-    A (f, i ),
+  Hbnd3Top (int l, myhface_t * f, bool isRear, const bnd_t bt) :
+    A (f, isRear ),
     _bbb (0), _dwn (0), _up (0) ,
     _bt( bt )
   {
@@ -993,10 +1162,10 @@ namespace ALUGrid
   }
 
   template < class A > inline Hbnd3Top < A > ::
-  Hbnd3Top (int l, myhface_t * f, int i,
+  Hbnd3Top (int l, myhface_t * f, bool isRear,
             innerbndseg_t * up, bnd_t bt,
             Gitter::helement_STI * gh, int gFace ) :
-    A (f, i ), _bbb (0), _dwn (0), _up (up) ,
+    A (f, isRear ), _bbb (0), _dwn (0), _up (up) ,
     _bt (bt)
   {
     // set level (declared in hbdnseg3_GEO to save memory usage)
@@ -1242,8 +1411,8 @@ namespace ALUGrid
   // #        ######  #    #     #     ####   #####      #     ####   #####    #      ####   #
 
   template < class A > inline Periodic3Top < A > ::
-  Periodic3Top (int l, myhface_t * f0, int t0,
-    myhface_t * f1, int t1, const bnd_t (&bt)[2] )
+  Periodic3Top (int l, myhface_t * f0, bool t0,
+    myhface_t * f1, bool t1, const bnd_t (&bt)[2] )
    : A (f0, t0, f1, t1)
    , _dwn (0), _bbb (0), _up(0)
    , _lvl (l)
@@ -1264,7 +1433,7 @@ namespace ALUGrid
   }
 
   template < class A > inline Periodic3Top < A > ::
-  Periodic3Top (int l, myhface_t * f0, int t0, myhface_t * f1, int t1, innerperiodic3_t * up, int nChild )
+  Periodic3Top (int l, myhface_t * f0, bool t0, myhface_t * f1, bool t1, innerperiodic3_t * up, int nChild )
     : A (f0, t0, f1, t1)
     , _dwn (0), _bbb (0), _up(up)
     , _lvl (l)

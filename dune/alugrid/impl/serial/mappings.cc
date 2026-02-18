@@ -1,9 +1,10 @@
-#ifndef DUNE_ALUGRID_MAPPINGS_IMP_CC
-#define DUNE_ALUGRID_MAPPINGS_IMP_CC
+#ifndef DUNE_ALUGRID_MAPPINGS_CC
+#define DUNE_ALUGRID_MAPPINGS_CC
 
 #include "mappings.hh"
 
-namespace Dune {
+namespace ALUGrid
+{
 
   //- Trilinear mapping (from alu3dmappings.hh)
   alu_inline TrilinearMapping ::
@@ -11,6 +12,16 @@ namespace Dune {
                     const coord_t& p2, const coord_t& p3,
                     const coord_t& p4, const coord_t& p5,
                     const coord_t& p6, const coord_t& p7)
+  {
+    buildMapping(p0,p1,p2,p3,p4,p5,p6,p7);
+    return ;
+  }
+
+  alu_inline TrilinearMapping ::
+  TrilinearMapping (const double_t& p0, const double_t& p1,
+                    const double_t& p2, const double_t& p3,
+                    const double_t& p4, const double_t& p5,
+                    const double_t& p6, const double_t& p7)
   {
     buildMapping(p0,p1,p2,p3,p4,p5,p6,p7);
     return ;
@@ -50,7 +61,7 @@ namespace Dune {
     a [7][2] = p7 [2] - p5 [2] + p4 [2] - p6 [2] - p3 [2] + p1 [2] + a [2][2] ;
 
     {
-      alu3d_ctype sum = 0.0;
+      alucoord_t sum = 0.0;
       // sum all factor from non-linear terms
       for(int i=4; i<8; ++i)
       {
@@ -82,14 +93,14 @@ namespace Dune {
     return ;
   }
 
-  alu_inline const FieldMatrix<alu3d_ctype, 3, 3>&
+  alu_inline const Dune::FieldMatrix<alucoord_t, 3, 3>&
   TrilinearMapping::jacobianTransposed(const coord_t& p)
   {
     linear( p );
     return Df;
   }
 
-  alu_inline const FieldMatrix<alu3d_ctype, 3, 3>&
+  alu_inline const Dune::FieldMatrix<alucoord_t, 3, 3>&
   TrilinearMapping::jacobianInverseTransposed(const coord_t& p)
   {
     // calculate inverse if not calculated or not affine
@@ -116,13 +127,27 @@ namespace Dune {
   }
 
   alu_inline void TrilinearMapping ::
-  map2world(const alu3d_ctype x, const alu3d_ctype y,
-            const alu3d_ctype z, coord_t& world ) const
+  map2world(const alucoord_t x, const alucoord_t y,
+            const alucoord_t z, double_t& world ) const
   {
-    const alu3d_ctype yz  = y * z ;
-    const alu3d_ctype xz  = x * z ;
-    const alu3d_ctype xy  = x * y ;
-    const alu3d_ctype xyz = x * yz ;
+    const alucoord_t yz  = y * z ;
+    const alucoord_t xz  = x * z ;
+    const alucoord_t xy  = x * y ;
+    const alucoord_t xyz = x * yz ;
+    world [0] = a [0][0] + a [1][0] * x + a [2][0] * y + a [3][0] * z + a [4][0] * xy + a [5][0] * yz + a [6][0] * xz + a [7][0] * xyz ;
+    world [1] = a [0][1] + a [1][1] * x + a [2][1] * y + a [3][1] * z + a [4][1] * xy + a [5][1] * yz + a [6][1] * xz + a [7][1] * xyz ;
+    world [2] = a [0][2] + a [1][2] * x + a [2][2] * y + a [3][2] * z + a [4][2] * xy + a [5][2] * yz + a [6][2] * xz + a [7][2] * xyz ;
+    return ;
+  }
+
+  alu_inline void TrilinearMapping ::
+  map2world(const alucoord_t x, const alucoord_t y,
+            const alucoord_t z, coord_t& world ) const
+  {
+    const alucoord_t yz  = y * z ;
+    const alucoord_t xz  = x * z ;
+    const alucoord_t xy  = x * y ;
+    const alucoord_t xyz = x * yz ;
     world [0] = a [0][0] + a [1][0] * x + a [2][0] * y + a [3][0] * z + a [4][0] * xy + a [5][0] * yz + a [6][0] * xz + a [7][0] * xyz ;
     world [1] = a [0][1] + a [1][1] * x + a [2][1] * y + a [3][1] * z + a [4][1] * xy + a [5][1] * yz + a [6][1] * xz + a [7][1] * xyz ;
     world [2] = a [0][2] + a [1][2] * x + a [2][2] * y + a [3][2] * z + a [4][2] * xy + a [5][2] * yz + a [6][2] * xz + a [7][2] * xyz ;
@@ -134,15 +159,15 @@ namespace Dune {
     linear(p[0], p[1], p[2]);
   }
 
-  alu_inline void TrilinearMapping :: linear(const alu3d_ctype x,
-                                         const alu3d_ctype y,
-                                         const alu3d_ctype z)
+  alu_inline void TrilinearMapping :: linear(const alucoord_t x,
+                                         const alucoord_t y,
+                                         const alucoord_t z)
   {
     if( ! calcedLinear_ )
     {
-      const alu3d_ctype yz = y * z ;
-      const alu3d_ctype xz = x * z ;
-      const alu3d_ctype xy = x * y ;
+      const alucoord_t yz = y * z ;
+      const alucoord_t xz = x * z ;
+      const alucoord_t xy = x * y ;
 
       // derivatives with respect to x
       Df[0][0] = a[1][0] + y * a[4][0] + z * a[6][0] + yz * a[7][0] ;
@@ -164,7 +189,26 @@ namespace Dune {
     }
   }
 
-  alu_inline alu3d_ctype TrilinearMapping :: det(const coord_t& point)
+
+  alu_inline alucoord_t TrilinearMapping :: volume()
+  {
+    //Gaussquadrature points on [-1,1] for order 3
+    //points are +/- gauss_point
+    const alucoord_t gauss_point =   .5773502691896258 ;
+    //rescale to [0,1]
+    const alucoord_t quad_point1 = 0.5 *( gauss_point + 1.0);
+    const alucoord_t quad_point2 = 0.5 *( -1.0 * gauss_point + 1.0);
+    const alucoord_t weight = 0.125;
+    alucoord_t volume = 0;
+    for(int i = 0; i<8 ; ++i)
+    {
+      coord_t qp{ (i>3 ? quad_point1 : quad_point2), (i/4 > 1 ? quad_point1 : quad_point2), (i%2 ? quad_point1 : quad_point2) };
+      volume += det(qp);
+    }
+    return weight * std::abs(volume);
+  }
+
+  alu_inline alucoord_t TrilinearMapping :: det(const coord_t& point)
   {
     // use cached value of determinant
     if( calcedDet_ ) return DetDf;
@@ -173,18 +217,18 @@ namespace Dune {
     linear (point) ;
 
     // code generated by maple
-    const alu3d_ctype t4  = Df[0][0] * Df[1][1];
-    const alu3d_ctype t6  = Df[0][0] * Df[1][2];
-    const alu3d_ctype t8  = Df[0][1] * Df[1][0];
-    const alu3d_ctype t10 = Df[0][2] * Df[1][0];
-    const alu3d_ctype t12 = Df[0][1] * Df[2][0];
-    const alu3d_ctype t14 = Df[0][2] * Df[2][0];
+    const alucoord_t t4  = Df[0][0] * Df[1][1];
+    const alucoord_t t6  = Df[0][0] * Df[1][2];
+    const alucoord_t t8  = Df[0][1] * Df[1][0];
+    const alucoord_t t10 = Df[0][2] * Df[1][0];
+    const alucoord_t t12 = Df[0][1] * Df[2][0];
+    const alucoord_t t14 = Df[0][2] * Df[2][0];
 
     // determinant
     DetDf = (t4*Df[2][2]-t6*Df[2][1]-t8*Df[2][2]+
             t10*Df[2][1]+t12*Df[1][2]-t14*Df[1][1]);
 
-    alugrid_assert ( DetDf > 0 );
+    //alugrid_assert ( DetDf > 0 );
     //: ( std::cout << "DetDf wrong: " << DetDf << std::endl,false ) );
 
     // set calced det to affine (true if affine false otherwise)
@@ -198,7 +242,7 @@ namespace Dune {
     if( calcedInv_ ) return ;
 
     //  Kramer - Regel, det() rechnet Df und DetDf neu aus.
-    const alu3d_ctype val = 1.0 / det(point) ;
+    const alucoord_t val = 1.0 / det(point) ;
 
     // calculate inverse^T
     Dfi[0][0] = ( Df[1][1] * Df[2][2] - Df[2][1] * Df[1][2] ) * val ;
@@ -231,14 +275,14 @@ namespace Dune {
       map2world (map, upd) ;
       // get inverse
       inverse ( map ) ;
-      const alu3d_ctype u0 = upd [0] - wld [0] ;
-      const alu3d_ctype u1 = upd [1] - wld [1] ;
-      const alu3d_ctype u2 = upd [2] - wld [2] ;
+      const alucoord_t u0 = upd [0] - wld [0] ;
+      const alucoord_t u1 = upd [1] - wld [1] ;
+      const alucoord_t u2 = upd [2] - wld [2] ;
 
       // jacobian is stored as transposed
-      const alu3d_ctype c0 = Dfi [0][0] * u0 + Dfi [1][0] * u1 + Dfi [2][0] * u2 ;
-      const alu3d_ctype c1 = Dfi [0][1] * u0 + Dfi [1][1] * u1 + Dfi [2][1] * u2 ;
-      const alu3d_ctype c2 = Dfi [0][2] * u0 + Dfi [1][2] * u1 + Dfi [2][2] * u2 ;
+      const alucoord_t c0 = Dfi [0][0] * u0 + Dfi [1][0] * u1 + Dfi [2][0] * u2 ;
+      const alucoord_t c1 = Dfi [0][1] * u0 + Dfi [1][1] * u1 + Dfi [2][1] * u2 ;
+      const alucoord_t c2 = Dfi [0][2] * u0 + Dfi [1][2] * u1 + Dfi [2][2] * u2 ;
       map [0] -= c0 ;
       map [1] -= c1 ;
       map [2] -= c2 ;
@@ -252,7 +296,7 @@ namespace Dune {
   // Constructor for FieldVectors
   alu_inline SurfaceNormalCalculator :: SurfaceNormalCalculator()
   {
-    alu3d_ctype p[3] = {0.0,0.0,0.0};
+    alucoord_t p[3] = {0.0,0.0,0.0};
     //initialize with zero
     buildMapping(p,p,p,p);
   }
@@ -264,7 +308,7 @@ namespace Dune {
   buildMapping  (const vector_t & _p0, const vector_t & _p1,
                  const vector_t & _p2, const vector_t & _p3)
   {
-    alu3d_ctype b[4][3];
+    alucoord_t b[4][3];
     buildMapping( _p0, _p1, _p2, _p3, b );
   }
 
@@ -274,7 +318,7 @@ namespace Dune {
   alu_inline void SurfaceNormalCalculator ::
   buildMapping  (const vector_t & _p0, const vector_t & _p1,
                  const vector_t & _p2, const vector_t & _p3,
-                 alu3d_ctype (&_b)[4][3])
+                 alucoord_t (&_b)[4][3])
   {
 
     _b [0][0] = _p0 [0] ;
@@ -302,7 +346,7 @@ namespace Dune {
 
 
     {
-      alu3d_ctype sum = 0.0;
+      alucoord_t sum = 0.0;
       // sum all factor from non-linear terms
       for(int j=0; j<3; ++j)
       {
@@ -337,7 +381,7 @@ namespace Dune {
   }
 
   alu_inline void SurfaceNormalCalculator ::
-  normal (const alu3d_ctype x, const alu3d_ctype y, coord3_t& norm) const {
+  normal (const alucoord_t x, const alucoord_t y, coord3_t& norm) const {
     norm [0] = -(_n [0][0] + _n [1][0] * x + _n [2][0] * y);
     norm [1] = -(_n [0][1] + _n [1][1] * x + _n [2][1] * y);
     norm [2] = -(_n [0][2] + _n [1][2] * x + _n [2][2] * y);
@@ -352,14 +396,72 @@ namespace Dune {
   }
 
   alu_inline void SurfaceNormalCalculator ::
-  negativeNormal(const alu3d_ctype x, const alu3d_ctype y, coord3_t& norm) const {
+  negativeNormal(const alucoord_t x, const alucoord_t y, coord3_t& norm) const {
     norm [0] = (_n [0][0] + _n [1][0] * x + _n [2][0] * y);
     norm [1] = (_n [0][1] + _n [1][1] * x + _n [2][1] * y);
     norm [2] = (_n [0][2] + _n [1][2] * x + _n [2][2] * y);
     return ;
   }
 
+  // LinearSurfaceMapping
+  // -------------------
 
+  alu_inline LinearSurfaceMapping :: LinearSurfaceMapping (const alucoord_t (&x0)[3],
+      const alucoord_t (&x1)[3], const alucoord_t (&x2)[3])
+    : _p0 (x0), _p1 (x1), _p2 (x2) {
+    _b[0][0] = _p0[0] ;
+    _b[0][1] = _p0[1] ;
+    _b[0][2] = _p0[2] ;
+    _b[1][0] = _p1[0] ;
+    _b[1][1] = _p1[1] ;
+    _b[1][2] = _p1[2] ;
+    _b[2][0] = _p2[0] ;
+    _b[2][1] = _p2[1] ;
+    _b[2][2] = _p2[2] ;
+
+          // Vorsicht: Im Unterschied zu der Originalversion von Mario ist
+          // die Dreiecksfl"achennormale hier mit -1/2 skaliert, wobei
+          // das Vorzeichen auf die widerspr"uchlichen Konventionen bei
+          // Dreiecks- und Vierecksfl"achen zur"uckgeht.
+
+    _n[0] = -0.5 * ((_p1[1]-_p0[1]) *(_p2[2]-_p1[2]) - (_p2[1]-_p1[1]) *(_p1[2]-_p0[2])) ;
+    _n[1] = -0.5 * ((_p1[2]-_p0[2]) *(_p2[0]-_p1[0]) - (_p2[2]-_p1[2]) *(_p1[0]-_p0[0])) ;
+    _n[2] = -0.5 * ((_p1[0]-_p0[0]) *(_p2[1]-_p1[1]) - (_p2[0]-_p1[0]) *(_p1[1]-_p0[1])) ;
+
+    return ;
+  }
+
+  alu_inline LinearSurfaceMapping :: LinearSurfaceMapping (const LinearSurfaceMapping & m) : _p0(m._p0), _p1(m._p1), _p2(m._p2) {
+    memcpy(_b, m._b, sizeof(alucoord_t [3][3])) ;
+    memcpy(_n, m._n, sizeof(alucoord_t [3])) ;
+    return ;
+  }
+
+  alu_inline void LinearSurfaceMapping :: map2world (const alucoord_t (&map)[3], alucoord_t (&wld)[3]) const {
+    alucoord_t x = map [0] ;
+    alucoord_t y = map [1] ;
+    alucoord_t z = map [2] ;
+    wld[0] =  x * _b[0][0] + y * _b[1][0] + z * _b[2][0] ;
+    wld[1] =  x * _b[0][1] + y * _b[1][1] + z * _b[2][1] ;
+    wld[2] =  x * _b[0][2] + y * _b[1][2] + z * _b[2][2] ;
+    return ;
+  }
+
+  alu_inline void LinearSurfaceMapping :: map2world(alucoord_t x, alucoord_t y, alucoord_t z, alucoord_t (&w)[3]) const {
+    alucoord_t p [3] ;
+    p[0] = x ;
+    p[1] = y ;
+    p[2] = z ;
+    map2world (p,w) ;
+    return ;
+  }
+
+  alu_inline void LinearSurfaceMapping :: normal (alucoord_t (&normal)[3]) const {
+    normal[0] = _n[0] ;
+    normal[1] = _n[1] ;
+    normal[2] = _n[2] ;
+    return ;
+  }
 
   // BilinearSurfaceMapping
   // ----------------------
@@ -368,7 +470,7 @@ namespace Dune {
   alu_inline BilinearSurfaceMapping ::
   BilinearSurfaceMapping ()
   {
-    alu3d_ctype p[3] = {0.0,0.0,0.0};
+    alucoord_t p[3] = {0.0,0.0,0.0};
     //initialize with zero
     buildMapping(p,p,p,p);
   }
@@ -426,9 +528,9 @@ namespace Dune {
   }
 
   alu_inline void BilinearSurfaceMapping ::
-  map2world (const alu3d_ctype x, const alu3d_ctype y, coord3_t& w) const
+  map2world (const alucoord_t x, const alucoord_t y, coord3_t& w) const
   {
-    const alu3d_ctype xy = x * y ;
+    const alucoord_t xy = x * y ;
     w[0] = _b [0][0] + x * _b [1][0] + y * _b [2][0] + xy * _b [3][0] ;
     w[1] = _b [0][1] + x * _b [1][1] + y * _b [2][1] + xy * _b [3][1] ;
     w[2] = _b [0][2] + x * _b [1][2] + y * _b [2][2] + xy * _b [3][2] ;
@@ -437,14 +539,14 @@ namespace Dune {
 
 
   alu_inline void BilinearSurfaceMapping ::
-  map2worldnormal (const alu3d_ctype x,
-                   const alu3d_ctype y,
-                   const alu3d_ctype z,
+  map2worldnormal (const alucoord_t x,
+                   const alucoord_t y,
+                   const alucoord_t z,
                    coord3_t& w) const
   {
     normal(x,y,normal_);
 
-    const alu3d_ctype xy = x * y ;
+    const alucoord_t xy = x * y ;
     w[0] = _b [0][0] + x * _b [1][0] + y * _b [2][0] + xy * _b [3][0] + z*normal_[0];
     w[1] = _b [0][1] + x * _b [1][1] + y * _b [2][1] + xy * _b [3][1] + z*normal_[1];
     w[2] = _b [0][2] + x * _b [1][2] + y * _b [2][2] + xy * _b [3][2] + z*normal_[2];
@@ -452,7 +554,7 @@ namespace Dune {
   }
 
   alu_inline void BilinearSurfaceMapping ::
-  map2worldlinear(const alu3d_ctype x, const alu3d_ctype y, const alu3d_ctype z) const
+  map2worldlinear(const alucoord_t x, const alucoord_t y, const alucoord_t z) const
   {
     normal(x,y,normal_);
 
@@ -476,8 +578,8 @@ namespace Dune {
   {
     if( ! _calcedMatrix )
     {
-      const alu3d_ctype x = local[0];
-      const alu3d_ctype y = local[1];
+      const alucoord_t x = local[0];
+      const alucoord_t y = local[1];
 
       matrix_[0][0] = _b [1][0] + y * _b [3][0] ;
       matrix_[0][1] = _b [1][1] + y * _b [3][1] ;
@@ -495,7 +597,7 @@ namespace Dune {
   }
 
   // calculates determinant of face mapping
-  alu_inline alu3d_ctype BilinearSurfaceMapping :: det(const coord2_t& point ) const
+  alu_inline alucoord_t BilinearSurfaceMapping :: det(const coord2_t& point ) const
   {
     // calculate normal
     normal(point[0], point[1], normal_);
@@ -512,7 +614,7 @@ namespace Dune {
     map2worldlinear (point[0],point[1],point[2]) ;
 
     //  Kramer - Regel, det() rechnet Df und DetDf neu aus.
-    const alu3d_ctype val = 1.0 / Df.determinant();
+    const alucoord_t val = 1.0 / Df.determinant();
 
     Dfi[0][0] = ( Df[1][1] * Df[2][2] - Df[1][2] * Df[2][1] ) * val ;
     Dfi[0][1] = ( Df[0][2] * Df[2][1] - Df[0][1] * Df[2][2] ) * val ;
@@ -571,12 +673,12 @@ namespace Dune {
       map2worldnormal (map_[0],map_[1],map_[2], upd) ;
       // calculate inverse
       inverse (map_) ;
-      const alu3d_ctype u0 = upd [0] - wld [0] ;
-      const alu3d_ctype u1 = upd [1] - wld [1] ;
-      const alu3d_ctype u2 = upd [2] - wld [2] ;
-      const alu3d_ctype c0 = Dfi [0][0] * u0 + Dfi [0][1] * u1 + Dfi [0][2] * u2 ;
-      const alu3d_ctype c1 = Dfi [1][0] * u0 + Dfi [1][1] * u1 + Dfi [1][2] * u2 ;
-      const alu3d_ctype c2 = Dfi [2][0] * u0 + Dfi [2][1] * u1 + Dfi [2][2] * u2 ;
+      const alucoord_t u0 = upd [0] - wld [0] ;
+      const alucoord_t u1 = upd [1] - wld [1] ;
+      const alucoord_t u2 = upd [2] - wld [2] ;
+      const alucoord_t c0 = Dfi [0][0] * u0 + Dfi [0][1] * u1 + Dfi [0][2] * u2 ;
+      const alucoord_t c1 = Dfi [1][0] * u0 + Dfi [1][1] * u1 + Dfi [1][2] * u2 ;
+      const alucoord_t c2 = Dfi [2][0] * u0 + Dfi [2][1] * u1 + Dfi [2][2] * u2 ;
       map_ [0] -= c0 ;
       map_ [1] -= c1 ;
       map_ [2] -= c2 ;
@@ -644,7 +746,7 @@ namespace Dune {
   template< int cdim >
   alu_inline void BilinearMapping< cdim >::map2world ( const ctype x, const ctype y, world_t &w ) const
   {
-    const alu3d_ctype xy = x * y;
+    const alucoord_t xy = x * y;
     for( int i = 0; i < cdim; ++i )
       w[i] = _b [0][i] + x * _b [1][i] + y * _b [2][i] + xy * _b [3][i];
   }
@@ -658,7 +760,7 @@ namespace Dune {
     map2world( m, dw );
     dw -= w;
 
-    alu3d_ctype step;
+    alucoord_t step;
     do {
       step = 0;
       for( int j = 0; j < 2; ++j )
@@ -771,7 +873,7 @@ namespace Dune {
 
   template< int cdim >
   alu_inline void BilinearMapping< cdim >
-    ::multTransposedMatrix ( const matrix_t &A, FieldMatrix< ctype, 2, 2 > &C )
+    ::multTransposedMatrix ( const matrix_t &A, Dune::FieldMatrix< ctype, 2, 2 > &C )
   {
     for( int i = 0; i < 2; ++i )
     {
@@ -787,7 +889,7 @@ namespace Dune {
 
   template< int cdim >
   alu_inline void BilinearMapping< cdim >
-    ::multMatrix ( const matrix_t &A, const FieldMatrix< ctype, 2, 2 > &B, inv_t &C )
+    ::multMatrix ( const matrix_t &A, const Dune::FieldMatrix< ctype, 2, 2 > &B, inv_t &C )
   {
     for( int i = 0; i < cdim; ++i )
       for( int j = 0; j < 2; ++j )
@@ -797,7 +899,7 @@ namespace Dune {
 
   template< int cdim >
   alu_inline void BilinearMapping< cdim >
-    ::map2worldlinear ( const alu3d_ctype x, const alu3d_ctype y ) const
+    ::map2worldlinear ( const alucoord_t x, const alucoord_t y ) const
   {
     if( !calcedMatrix_ )
     {
@@ -817,7 +919,7 @@ namespace Dune {
     if( !calcedInv_ )
     {
       map2worldlinear ( m[0], m[1] );
-      det_ = std::abs( FMatrixHelp::invertMatrix( matrix_, invTransposed_ ) );
+      det_ = std::abs( Dune::FMatrixHelp::invertMatrix( matrix_, invTransposed_ ) );
       calcedDet_ = calcedInv_ = affine();
     }
   }
@@ -828,10 +930,10 @@ namespace Dune {
     // use least squares approach
     if( !calcedInv_ )
     {
-      FieldMatrix< ctype, 2, 2 > AT_A, inv_AT_A;
+      Dune::FieldMatrix< ctype, 2, 2 > AT_A, inv_AT_A;
       map2worldlinear ( m[0], m[1] );
       multTransposedMatrix( matrix_, AT_A );
-      FMatrixHelp::invertMatrix( AT_A, inv_AT_A );
+      Dune::FMatrixHelp::invertMatrix( AT_A, inv_AT_A );
       multMatrix( matrix_, inv_AT_A, invTransposed_ );
       calcedInv_ = affine();
     }
@@ -1047,14 +1149,13 @@ namespace Dune {
     jacobianInverseTransposed( local ).mtv(globalCoord, local);
   }
 
-
   // tetra mapping
   template <int cdim, int mydim>
   alu_inline void LinearMapping<cdim, mydim> ::
   inverse(const map_t& local) const
   {
     // invert transposed matrix and return determinant
-    _det = std::abs( FMatrixHelp::invertMatrix(_matrix , _invTransposed ) );
+    _det = std::abs( Dune::FMatrixHelp::invertMatrix(_matrix , _invTransposed ) );
     // set flag
     _calcedDet = _calcedInv = true ;
   }
@@ -1119,15 +1220,15 @@ namespace Dune {
   inverseCodimOne(const map_t&) const
   {
     // use least squares approach
-    FieldMatrix<ctype, mydim, mydim> AT_A;
+    Dune::FieldMatrix<ctype, mydim, mydim> AT_A;
 
     // calc ret = A^T*A
     multTransposedMatrix(_matrix, AT_A );
 
     // calc Jinv_ = A (A^T*A)^-1
-    FieldMatrix< ctype, mydim, mydim> inv_AT_A;
+    Dune::FieldMatrix< ctype, mydim, mydim> inv_AT_A;
 
-    FMatrixHelp :: invertMatrix( AT_A, inv_AT_A );
+    Dune::FMatrixHelp :: invertMatrix( AT_A, inv_AT_A );
     multMatrix( _matrix, inv_AT_A, _invTransposed );
 
     // set flag
@@ -1171,7 +1272,7 @@ namespace Dune {
   template <int cdim, int mydim>
   alu_inline void LinearMapping<cdim, mydim> ::
   multTransposedMatrix(const matrix_t& matrix,
-                       FieldMatrix<ctype, mydim, mydim>& result) const
+                       Dune::FieldMatrix<ctype, mydim, mydim>& result) const
   {
     typedef typename matrix_t::size_type size_type;
     for(size_type i=0; i<mydim; ++i)
@@ -1190,7 +1291,7 @@ namespace Dune {
   template <int cdim, int mydim>
   alu_inline void LinearMapping<cdim, mydim> ::
   multMatrix ( const matrix_t &A,
-               const FieldMatrix< ctype, mydim, mydim > &B,
+               const Dune::FieldMatrix< ctype, mydim, mydim > &B,
                inv_t& ret ) const
   {
     //! calculates ret = A * B
@@ -1212,14 +1313,14 @@ namespace Dune {
   alu_inline void LinearMapping<3, 1> ::
   inverse(const map_t&) const
   {
-    FieldMatrix<ctype, 1, 1> AT_A_;
+    Dune::FieldMatrix<ctype, 1, 1> AT_A_;
 
     // calc ret = A^T*A
     multTransposedMatrix(_matrix, AT_A_ );
 
     // calc Jinv_ = A (A^T*A)^-1
-    FieldMatrix< ctype, 1, 1 > inv_AT_A;
-    FMatrixHelp :: invertMatrix( AT_A_, inv_AT_A );
+    Dune::FieldMatrix< ctype, 1, 1 > inv_AT_A;
+    Dune::FMatrixHelp :: invertMatrix( AT_A_, inv_AT_A );
     multMatrix( _matrix, inv_AT_A, _invTransposed );
 
     // set flag
@@ -1437,5 +1538,5 @@ namespace Dune {
 #endif // ! COMPILE_ALUGRID_INLINE
 
 } // end namespace Dune
-#endif // end DUNE_ALUGRID_MAPPINGS_IMP_CC
 
+#endif //DUNE_ALUGRID_MAPPINGS_CC

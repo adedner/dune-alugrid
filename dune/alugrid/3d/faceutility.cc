@@ -37,16 +37,16 @@ namespace Dune
   typename ALU3dGridSurfaceMappingFactory< dim, dimworld, hexa, Comm >::SurfaceMappingType *
   ALU3dGridSurfaceMappingFactory< dim, dimworld, hexa, Comm >::buildSurfaceMapping ( const GEOFaceType &face ) const
   {
-    typedef FaceTopologyMapping< hexa > FaceTopo;
+    //typedef FaceTopologyMapping< hexa > FaceTopo;
     // this is the new implementation using FieldVector
     // see mappings.hh
     // we have to swap the vertices, because
     // local face numbering in Dune is different to ALUGrid (see topology.cc)
     return new SurfaceMappingType(
-        face.myvertex( FaceTopo::dune2aluVertex(0) )->Point(),
-        face.myvertex( FaceTopo::dune2aluVertex(1) )->Point(),
-        face.myvertex( FaceTopo::dune2aluVertex(2) )->Point(),
-        face.myvertex( FaceTopo::dune2aluVertex(3) )->Point() );
+        face.myvertex( 0 )->Point(),
+        face.myvertex( 1 )->Point(),
+        face.myvertex( 2 )->Point(),
+        face.myvertex( 3 )->Point() );
   }
 
 
@@ -99,20 +99,18 @@ namespace Dune
   void ALU3dGridGeometricFaceInfoBase< 2, dimworld, type, Comm >
     ::referenceElementCoordinatesUnrefined ( SideIdentifier side, LocalCoordinateType &result ) const
   {
-    //TODO use connector.face.nChild and (maybe twist)    referenceElementCoordinatesRefined ( side, cornerCoords )
-
     // get the parent's face coordinates on the reference element (Dune reference element)
     LocalCoordinateType cornerCoords;
     referenceElementCoordinatesRefined ( side, cornerCoords );
 
 
     //for some reason the behavior for tetra and hexa is opposite
-    if(connector_.face().nChild() == ( type == tetra) ? 1 : 0){
+    if(connector_.face().nChild() ==  0){
       result[0] = cornerCoords[0];
       result[1] =  ( cornerCoords[1] + cornerCoords[0] );
       result[1] *=0.5;
     }
-    else if(connector_.face().nChild() == ( type == tetra ) ? 0 : 1)
+    else if(connector_.face().nChild() ==  1)
     {
       result[0] = ( cornerCoords[1] + cornerCoords[0] );
       result[0] *= 0.5;

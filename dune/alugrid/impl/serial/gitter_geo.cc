@@ -11,8 +11,7 @@
 #include <dune/alugrid/impl/macrofileheader.hh>
 #include <dune/alugrid/impl/binaryio.hh>
 
-#include "mapp_cube_3d.h"
-#include "mapp_tetra_3d.h"
+#include "mappings.hh"
 #include "gitter_sti.h"
 #include "gitter_mgb.h"
 #include "walk.h"
@@ -29,41 +28,19 @@ namespace ALUGrid
         & (Gitter::Geometric::hasFaceEmpty::instance() ), -1);
 
   // prototype of Tetra type ( the faces of a tetrahedron )
-  const int Gitter::Geometric::Tetra::prototype [4][3] = {{1,3,2},{0,2,3},{0,3,1},{0,1,2}};
+  const int Gitter::Geometric::Tetra::prototype [4][3] = {{0,1,2},{0,1,3},{0,2,3},{1,2,3}};
+
+  // vertex opposite to face (mostly 3 - face)
+  const int Gitter::Geometric::Tetra::oppositeVertex [4] = { 3, 2, 1, 0 }; // opposite vertex of given face
 
   // edge which tell from which face with which edge number we get edge 0 to 5
-  const int Gitter::Geometric::Tetra::edgeMap [6][2] = {{3, 0},
-                                                              {3, 2},
-                                                              {1, 2},
-                                                              {0, 2},
-                                                              {0, 0},
-                                                              {0, 1}};
+  const int Gitter::Geometric::Tetra::edgeMap [6][2] = {{0, 0},
+                                                        {0, 1},
+                                                        {0, 2},
+                                                        {1, 1},
+                                                        {1, 2},
+                                                        {2, 2}};
 
-  // calculation Fomula is
-  // edgeTwist = twist(face) < 0 ?
-  //          (6 - vertex + twist(face)) % 3 :
-  //          (vertex + twist(face)) % 3);
-  const int Gitter::Geometric::Tetra::edgeTwist[6][3] = {
-                                                                {0, 2, 1}, // twist -3
-                                                                {1, 0, 2}, // twist -2
-                                                                {2, 1, 0}, // twist -1
-                                                                {0, 1, 2}, // twist 0
-                                                                {1, 2, 0}, // twist 1
-                                                                {2, 0, 1}, // twist 2
-                                                                      };
-
-  // calculation Fomula is
-  // vertexTwist = (twist(face) < 0 ?
-  //                 (7 - vertex + twist(face)) % 3 :
-  //                 (vertex + twist(face)) % 3);
-  const int Gitter::Geometric::Tetra::vertexTwist[6][3] = {
-                                                                {1, 0, 2}, // twist -3
-                                                                {2, 1, 0}, // twist -2
-                                                                {0, 2, 1}, // twist -1
-                                                                {0, 1, 2}, // twist 0
-                                                                {1, 2, 0}, // twist 1
-                                                                {2, 0, 1}, // twist 2
-                                                                      };
 
   const std::vector< std::vector< int > > Gitter::Geometric::Tetra::_verticesNotOnFace( Gitter::Geometric::Tetra::initVerticesNotOnFace() );
   const std::vector< std::vector< int > > Gitter::Geometric::Tetra::_edgesNotOnFace( Gitter::Geometric::Tetra::initEdgesNotOnFace() );
@@ -76,7 +53,7 @@ namespace ALUGrid
     for(int f=0; f<4; ++f)
     {
       verticesNotFace[f].resize(1);
-      verticesNotFace[f][0] = f;
+      verticesNotFace[f][0] = Gitter::Geometric::Tetra::oppositeVertex[ f ];
     }
     return verticesNotFace;
   }
@@ -99,8 +76,8 @@ namespace ALUGrid
       // tell which vertices belong to which edge
       const int protoEdges [6][2] = {{0, 1},
                                      {0, 2},
-                                     {0, 3},
                                      {1, 2},
+                                     {0, 3},
                                      {1, 3},
                                      {2, 3}};
 
@@ -162,10 +139,10 @@ namespace ALUGrid
   }
 
   // prototype of periodic 3 type
-  const int Gitter::Geometric::Periodic3::prototype [2][3] = {{0,1,2},{3,5,4}};
+  const int Gitter::Geometric::Periodic3::prototype [2][3] = {{0,1,2},{3,4,5}};
 
   // prototype of periodic 4 type
-  const int Gitter::Geometric::Periodic4::prototype [2][4] = {{0,3,2,1},{4,5,6,7}};
+  const int Gitter::Geometric::Periodic4::prototype [2][4] = {{0,1,2,3},{4,5,6,7}};
 
 
   // #     #
@@ -212,10 +189,14 @@ namespace ALUGrid
     //
 
   // defines from which vertices one face is created
-  const int Gitter::Geometric::Hexa::prototype [6][4] =
-          {{0,3,2,1},{4,5,6,7},{0,1,5,4},{1,2,6,5},{2,3,7,6},{0,4,7,3}};
+  const int Gitter::Geometric::Hexa::prototype [6][4] = {{0,2,4,6},
+                                                         {1,3,5,7},
+                                                         {0,1,4,5},
+                                                         {2,3,6,7},
+                                                         {0,1,2,3},
+                                                         {4,5,6,7}};
 
-  const int Gitter::Geometric::Hexa::oppositeFace [6] = { 1 , 0 , 4 , 5 , 2 , 3  }; // opposite face of given face
+  const int Gitter::Geometric::Hexa::oppositeFace [6] = { 1 , 0 , 3, 2 , 5, 4 }; // opposite face of given face
 
   const std::vector< std::vector< int > > Gitter::Geometric::Hexa::_verticesNotOnFace( Gitter::Geometric::Hexa::initVerticesNotOnFace() );
   const std::vector< std::vector< int > > Gitter::Geometric::Hexa::_edgesNotOnFace( Gitter::Geometric::Hexa::initEdgesNotOnFace() );
@@ -257,8 +238,8 @@ namespace ALUGrid
 
       // vertices of the edges of an Hexa
       const int protoEdges [12][2] =
-          { {0,1} , {0,3} , {0,4} , {1,2} , {1,5} , {2,3} ,
-            {2,6} , {3,7} , {4,5} , {4,7} , {5,6} , {6,7} };
+          { {0,4} , {1,5} , {2,6} , {3,7} , {0,2} , {1,3} ,
+            {0,1} , {2,3} , {4,6} , {5,7} , {4,5} , {6,7} };
 
       const int (&edges)[12][2] = protoEdges;
       const int (&vertices)[4]  = prototype [ f ];
@@ -318,60 +299,29 @@ namespace ALUGrid
 
   // defines how we get an edge from an hexa , first is face , second is edge
   // for example the 0th edge is defined by the 3th edge of the 0th face
-  const int Gitter::Geometric::Hexa::edgeMap [12][2] = {{0, 3},
-                                                              {0, 0},
-                                                              {2, 3},
-                                                              {0, 2},
-                                                              {2, 1},
-                                                              {0, 1},
-                                                              {4, 3},
-                                                              {4, 1},
+  const int Gitter::Geometric::Hexa::edgeMap [12][2] = {{0, 0},
                                                               {1, 0},
-                                                              {1, 3},
+                                                              {0, 1},
                                                               {1, 1},
-                                                              {1, 2}};
+                                                              {4, 0},
+                                                              {4, 1},
+                                                              {4, 2},
+                                                              {4, 3},
+                                                              {5, 0},
+                                                              {5, 1},
+                                                              {5, 2},
+                                                              {5, 3}};
 
-  // calculation Fomula is
-  // vertexTwist = twist(face) < 0 ?
-  //                   (9 - vertex + twist(face)) % 4 :
-  //                   (vertex + twist(face)) % 4)
-  const int Gitter::Geometric::Hexa::
-  vertexTwist[8][4] = {
-    {1,0,3,2}, // twist = -4
-    {2,1,0,3}, // twist = -3
-    {3,2,1,0}, // twist = -2
-    {0,3,2,1}, // twist = -1
-    {0,1,2,3}, // twist = 0
-    {1,2,3,0}, // twist = 1
-    {2,3,0,1}, // twist = 2
-    {3,0,1,2}  // twist = 3
-  };
-
-  // calculation Fomula is
-  // edgeTwist = twist(face) < 0 ?
-  //          (6 - vertex + twist(face)) % 3 :
-  //          (vertex + twist(face)) % 3);
-  const int Gitter::Geometric::Hexa::
-  edgeTwist[8][4] = {
-    {0,3,2,1}, // twist = -4
-    {1,0,3,2}, // twist = -3
-    {2,1,0,3}, // twist = -2
-    {3,2,1,0}, // twist = -1
-    {0,1,2,3}, // twist = 0
-    {1,2,3,0}, // twist = 1
-    {2,3,0,1}, // twist = 2
-    {3,0,1,2}  // twist = 3
-   };
 
   const int Gitter::Geometric::Hexa::
   vertex2Face [8][2] = {
     {0,0},// vx = 0
-    {0,3},// vx = 1
-    {0,2},// vx = 2
-    {0,1},// vx = 3
-    {1,0},// vx = 4
-    {1,1},// vx = 5
-    {1,2},// vx = 6
+    {1,0},// vx = 1
+    {0,1},// vx = 2
+    {1,1},// vx = 3
+    {0,2},// vx = 4
+    {1,2},// vx = 5
+    {0,3},// vx = 6
     {1,3} // vx = 7
   };
 
@@ -391,8 +341,8 @@ namespace ALUGrid
         {
           std::cerr << "ERROR: On level " << level () << " ";
           std::cerr << "vertex (" << i0 << "," << j0 << ") != vertex (" << i1 << "," << j1 << ")";
-          std::cerr << "\t(" << i0 << "," << j0 << ") =" << myvertex(i0,j0) << " " << twist (i0);
-          std::cerr << "\t(" << i1 << "," << j1 << ") =" << myvertex(i1,j1) << " " << twist (i1);
+          std::cerr << "\t(" << i0 << "," << j0 << ") =" << myvertex(i0,j0);
+          std::cerr << "\t(" << i1 << "," << j1 << ") =" << myvertex(i1,j1);
           std::cerr << std::endl;
           nfaults ++;
         }
@@ -400,8 +350,8 @@ namespace ALUGrid
         {
           std::cerr << "ERROR: On level " << level () << " ";
           std::cerr << "vertex (" << i0 << "," << j0 << ") != vertex (" << i2 << "," << j2 << ")";
-          std::cerr << "\t(" << i0 << "," << j0 << ") =" << myvertex(i0,j0) << " " << twist (i0);
-          std::cerr << "\t(" << i2 << "," << j2 << ") =" << myvertex(i2,j2) << " " << twist (i1);
+          std::cerr << "\t(" << i0 << "," << j0 << ") =" << myvertex(i0,j0);
+          std::cerr << "\t(" << i2 << "," << j2 << ") =" << myvertex(i2,j2);
           std::cerr << std::endl;
           nfaults ++;
         }
@@ -569,14 +519,12 @@ namespace ALUGrid
   {
     std::cerr << "**WARNING (ignored): Periodic3::test () not implemented." << std::endl;
   //  const int digits = 3;
-  //  cout << "Fl\"ache: 0, Twist: " << twist (0) << "\t";
   //  const VertexGeo * vx = myvertex (0,0);
   //  cout << "(" << setw (digits) << vx->Point ()[0] << "," << setw (digits) << vx->Point ()[1] << "," << setw (digits) << vx->Point ()[2] << ") ";
   //  vx = myvertex (0,1);
   //  cout << "(" << setw (digits) << vx->Point ()[0] << "," << setw (digits) << vx->Point ()[1] << "," << setw (digits) << vx->Point ()[2] << ") ";
   //  vx = myvertex (0,2);
   //  cout << "(" << setw (digits) << vx->Point ()[0] << "," << setw (digits) << vx->Point ()[1] << "," << setw (digits) << vx->Point ()[2] << ") \n";
-  //  cout << "Fl\"ache: 1, Twist: " << twist (1) << "\t";
   //  vx = myvertex (1,0);
   //  cout << "(" << setw (digits) << vx->Point ()[0] << "," << setw (digits) << vx->Point ()[1] << "," << setw (digits) << vx->Point ()[2] << ") ";
   //  vx = myvertex (1,2);
@@ -797,22 +745,22 @@ namespace ALUGrid
       const hexalist_t::const_iterator end = _hexaList.end ();
       for (hexalist_t::const_iterator i = _hexaList.begin (); i != end; ++i )
       {
-        for (int j = 0; j < 7; ++ j )
+        for (int j = 0; j < 8; ++ j )
         {
           os << (*i)->myvertex (j)->ident() << ws ;
         }
-        os << (*i)->myvertex (7)->ident() << std::endl ;
+        os << (*i)->isRearFlag() << std::endl;
       }
 
       os << int(_periodic4List.size ()) << ws << int(_hbndseg4List.size ()) << std::endl;
       const periodic4list_t::const_iterator pend = _periodic4List.end ();
       for (periodic4list_t::const_iterator i = _periodic4List.begin (); i != pend; ++i)
       {
-        for (int j = 0; j < 7; ++j )
+        for (int j = 0; j < 8; ++j )
         {
           os << (*i)->myvertex (j)->ident() << ws ;
         }
-        os << (*i)->myvertex (7)->ident() << std::endl;
+        os << (*i)->isRearFlag() << std::endl;
       }
       const hbndseg4list_t::const_iterator hend = _hbndseg4List.end ();
       for (hbndseg4list_t::const_iterator i = _hbndseg4List.begin (); i != hend; ++i)
@@ -834,31 +782,22 @@ namespace ALUGrid
       const tetralist_t::const_iterator end = _tetraList.end ();
       for (tetralist_t::const_iterator i = _tetraList.begin (); i != end; ++i )
       {
-        for (int j = 0; j < 3; ++ j )
+        for (int j = 0; j < 4; ++ j )
         {
           os << (*i)->myvertex (j)->ident() << ws ;
         }
-
-        if( conforming )
-        {
-          auto flag = (*i)->simplexTypeFlag();
-          os << (*i)->myvertex (3)->ident() << ws << flag << std::endl ;
-        }
-        else
-        {
-          os << (*i)->myvertex (3)->ident() << std::endl ;
-        }
+        os << (*i)->isRearFlag() << std::endl;
       }
 
       os << int(_periodic3List.size ()) << ws << int(_hbndseg3List.size ()) << std::endl;
       const periodic3list_t::const_iterator pend = _periodic3List.end ();
       for (periodic3list_t::const_iterator i = _periodic3List.begin (); i != pend; ++i )
       {
-        for (int j = 0; j < 5; ++j )
+        for (int j = 0; j < 6; ++j )
         {
           os << (*i)->myvertex (j)->ident() << ws ;
         }
-        os << (*i)->myvertex (5)->ident() << std::endl;
+        os << (*i)->isRearFlag() << std::endl;
       }
 
       const hbndseg3list_t::const_iterator hend = _hbndseg3List.end ();

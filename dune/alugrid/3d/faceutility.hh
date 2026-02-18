@@ -6,7 +6,8 @@
 
 #include <dune/geometry/referenceelements.hh>
 
-#include "mappings.hh"
+#include "../impl/serial/mappings.hh"
+#include "nonconfmappings.hh"
 #include "alu3dinclude.hh"
 #include "topology.hh"
 
@@ -58,7 +59,7 @@ namespace Dune
   public:
     //! constructor creating empty face info
     ALU3dGridFaceInfo( const bool levelIntersection = false );
-    void updateFaceInfo(const GEOFaceType& face, int innerLevel, int innerTwist);
+    void updateFaceInfo(const GEOFaceType& face, int innerLevel, bool isInnerRear);
 
     //- constructors and destructors
     //! Construct a connector from a face and the twist seen from the inner
@@ -66,7 +67,7 @@ namespace Dune
     //! \note: The user is responsible for the consistency of the input data
     //! as well as for choosing the appropriate (i.e. most refined) face
     //! Copy constructor
-    ALU3dGridFaceInfo(const GEOFaceType& face, int innerTwist);
+    ALU3dGridFaceInfo(const GEOFaceType& face, bool isInnerRear);
     ALU3dGridFaceInfo(const ALU3dGridFaceInfo &orig);
     //! Destructor
     ~ALU3dGridFaceInfo();
@@ -108,10 +109,10 @@ namespace Dune
     //! \note This function is only meaningful at a boundary
     const BNDFaceType& boundaryFace() const;
 
-    //! Twist of the face seen from the inner element
-    int innerTwist() const;
-    //! Twist of the face seen from the outer element
-    int outerTwist() const;
+    //! Information which of the faces is rear seen from the inner element
+    bool isInnerRear() const;
+    //! Information which of the faces is rear seen from the outer element
+    bool isOuterRear() const;
 
     //! Twist of the face seen from the inner element
     int duneTwist(const int faceIdx, const int aluTwist) const;
@@ -144,6 +145,24 @@ namespace Dune
     //! reset flags
     void setFlags( const bool conformingRefinement, const bool ghostCellsEnabled );
 
+    const alu3d_ctype(&outerPoint() const)[3]
+    {
+      if( type == tetra )
+      {
+        return ghostElem_ ?
+          ghostElem_->myvertex( 3 - innerALUFaceIndex() )->Point() :
+          innerEntity().myvertex( 3 - innerALUFaceIndex() )->Point();
+      }
+      else
+      {
+        int innerFaceIndex = innerALUFaceIndex();
+        int face = (innerFaceIndex % 2 == 0) ? innerFaceIndex + 1 : innerFaceIndex -1;
+        return ghostElem_ ?
+          ghostElem_->myhface( face )->myvertex(0)->Point() :
+          innerEntity().myhface( face )->myvertex(0)->Point();
+      }
+    }
+
   private:
     //! Description of conformance on the face
     ConformanceState getConformanceState(const int innerLevel) const;
@@ -159,11 +178,10 @@ namespace Dune
     const HasFaceType* innerElement_;
     const HasFaceType* outerElement_;
 
+    const GEOElementType* ghostElem_;
+
     int  innerFaceNumber_;
     int  outerFaceNumber_;
-
-    int  innerTwist_;
-    int  outerTwist_;
 
     mutable int segmentId_;
     int bndId_;
@@ -174,9 +192,12 @@ namespace Dune
                       domainBoundary      = 3, // boundary with domain, no outside
                       outerGhostBoundary  = 4};// process boundary, outside might be ghost
 
+    ConformanceState conformanceState_;
+
     boundary_t bndType_;
 
-    ConformanceState conformanceState_;
+    bool  isInnerRear_;                // true is the inner element is obtained  from rear instead of front
+
     bool conformingRefinement_ ;       // true if conforming refinement is enabled
     bool ghostCellsEnabled_ ;          // true if ghost cells are present
     const bool levelIntersection_ ;    // true if called from a levelintersection iterator
@@ -286,7 +307,6 @@ namespace Dune
     void generateLocalGeometries() const;
 
     int globalVertexIndex(const int duneFaceIndex,
-                          const int faceTwist,
                           const int duneFaceVertexIndex) const;
 
     void referenceElementCoordinatesRefined(SideIdentifier side,
@@ -405,6 +425,9 @@ namespace Dune
 
     // false if surface mapping needs a update
     mutable bool mappingGlobalUp2Date_;
+
+    // false if outerNormal_ has to be multiplied by -1
+    mutable bool negativeNormal_ = true;
   };
 
   // ALU3dGridGeometricFaceInfoBase
@@ -470,7 +493,6 @@ namespace Dune
     //- private methods
 
     int globalVertexIndex(const int duneFaceIndex,
-                          const int faceTwist,
                           const int duneFaceVertexIndex) const;
 
     void referenceElementCoordinatesRefined(SideIdentifier side,

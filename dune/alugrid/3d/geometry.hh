@@ -13,7 +13,8 @@
 // Local includes
 #include "alu3dinclude.hh"
 #include "topology.hh"
-#include "mappings.hh"
+//#include "../impl/serial/mappings.hh"
+#include "nonconfmappings.hh"
 #include <dune/alugrid/common/memory.hh>
 
 namespace Dune
@@ -28,8 +29,6 @@ namespace Dune
   class ALU3dGridGeometry;
   template< int dim, int dimworld, ALU3dGridElementType, class >
   class ALU3dGrid;
-  class BilinearSurfaceMapping;
-  class TrilinearMapping;
 
   template< class GridImp >
   class ALU3dGridIntersectionIterator;
@@ -716,9 +715,9 @@ namespace Dune
     //***********************************************************************
     //! generate the geometry out of a given ALU3dGridElement
     bool buildGeom(const IMPLElementType & item);
-    bool buildGeom(const HFaceType & item, int twist);
-    bool buildGeom(const HEdgeType & item, int twist);
-    bool buildGeom(const VertexType & item, int twist);
+    bool buildGeom(const HFaceType & item);
+    bool buildGeom(const HEdgeType & item);
+    bool buildGeom(const VertexType & item);
 
     // this method is used by the intersection iterator
     bool buildGeom(const FaceCoordinatesType& coords);

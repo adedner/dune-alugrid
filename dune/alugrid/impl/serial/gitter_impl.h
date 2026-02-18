@@ -6,8 +6,6 @@
 
 #include "gitter_sti.h"
 
-#include "mapp_tetra_3d.h"
-
 #include "gitter_hexa_top.h"
 #include "gitter_tetra_top.h"
 
@@ -45,7 +43,7 @@ namespace ALUGrid
         class Hbnd3Default : public hbndseg3_GEO
         {
           protected :
-           inline Hbnd3Default (myhface3_t *, int);
+           inline Hbnd3Default (myhface3_t *, bool);
            virtual ~Hbnd3Default () {}
            //! return pointer to grid
            Gitter * myGrid() { return myhface(0)->myvertex(0)->myGrid(); }
@@ -88,7 +86,7 @@ namespace ALUGrid
         class Hbnd4Default : public hbndseg4_GEO
         {
           protected :
-            inline Hbnd4Default (myhface4_t *, int);
+            inline Hbnd4Default (myhface4_t *, bool);
             virtual ~Hbnd4Default () {}
             //! return pointer to grid
             Gitter * myGrid() { return myhface(0)->myvertex(0)->myGrid(); }
@@ -142,7 +140,7 @@ namespace ALUGrid
           protected :
             typedef VertexEmpty   innervertex_t;
             typedef hedge1_IMPL   inneredge_t;
-            inline Hface3Empty (myhedge1_t *,int, myhedge1_t *,int, myhedge1_t *,int);
+            inline Hface3Empty (myhedge1_t *, myhedge1_t *, myhedge1_t *);
            ~Hface3Empty () {}
            // Methode um einen Vertex zu verschieben; f"ur die Randanpassung
            virtual inline void projectVertex(const ProjectVertex &pv);
@@ -155,7 +153,7 @@ namespace ALUGrid
          protected :
            typedef VertexEmpty innervertex_t;
            typedef hedge1_IMPL     inneredge_t;
-           inline Hface4Empty (myhedge1_t *,int, myhedge1_t *,int, myhedge1_t *,int,myhedge1_t *,int);
+           inline Hface4Empty (myhedge1_t *, myhedge1_t *, myhedge1_t *,myhedge1_t *);
            ~Hface4Empty () {}
            // Methode um einen Vertex zu verschieben; f"ur die Randanpassung
            virtual inline void projectVertex(const ProjectVertex &pv);
@@ -169,7 +167,7 @@ namespace ALUGrid
         typedef hface3_IMPL innerface_t;
         typedef hedge1_IMPL inneredge_t;
         typedef VertexEmpty innervertex_t;
-        inline TetraEmpty (myhface3_t *,int,myhface3_t *,int,myhface3_t *,int,myhface3_t *,int);
+        inline TetraEmpty (myhface3_t *,bool,myhface3_t *,bool,myhface3_t *,bool,myhface3_t *,bool);
 
       public:
         ////////////////////////////////////////////////
@@ -230,7 +228,7 @@ namespace ALUGrid
         typedef tetra_IMPL GhostElement_t;
         typedef periodic3_GEO::myneighbour_t myneighbour_t;
 
-        inline Periodic3Empty (myhface3_t *,int,myhface3_t *,int);
+        inline Periodic3Empty (myhface3_t *,bool,myhface3_t *,bool);
         ~Periodic3Empty () {}
         // do nothing here
         virtual void resetGhostIndices() {}
@@ -246,10 +244,9 @@ namespace ALUGrid
         typedef hface4_IMPL innerface_t;
         typedef hedge1_IMPL inneredge_t;
         typedef VertexEmpty innervertex_t;
-        inline HexaEmpty (myhface4_t *,int,myhface4_t *,int,myhface4_t *,int,myhface4_t *,int,myhface4_t *,int,myhface4_t *,int);
+        inline HexaEmpty (myhface4_t *,bool,myhface4_t *,bool,myhface4_t *,bool,myhface4_t *,bool,myhface4_t *,bool,myhface4_t *,bool);
         ~HexaEmpty () {}
 
-        // Neu: burriad 29.4.05
         int preCoarsening();
         int postRefinement();
 
@@ -304,7 +301,7 @@ namespace ALUGrid
         typedef VertexEmpty innervertex_t;
         typedef hexa_IMPL GhostElement_t;
 
-        inline Periodic4Empty (myhface4_t *,int,myhface4_t *,int);
+        inline Periodic4Empty (myhface4_t *,bool,myhface4_t *,bool);
         ~Periodic4Empty () {}
 
         // so nothing here
@@ -325,18 +322,18 @@ namespace ALUGrid
       virtual VertexGeo     * insert_vertex (double, double, double, int);
       virtual VertexGeo     * insert_ghostvx (double, double, double, int);
       virtual hedge1_GEO    * insert_hedge1 (VertexGeo *, VertexGeo *);
-      virtual hface3_GEO    * insert_hface3 (hedge1_GEO *(&)[3], int (&)[3]);
-      virtual hface4_GEO    * insert_hface4 (hedge1_GEO *(&)[4], int (&)[4]);
-      virtual hbndseg3_GEO  * insert_hbnd3 (hface3_GEO *, int, Gitter::hbndseg_STI::bnd_t)      ;
+      virtual hface3_GEO    * insert_hface3 (hedge1_GEO *(&)[3]);
+      virtual hface4_GEO    * insert_hface4 (hedge1_GEO *(&)[4]);
+      virtual hbndseg3_GEO  * insert_hbnd3 (hface3_GEO *, const IsRearFlag&, Gitter::hbndseg_STI::bnd_t)      ;
       // version with point , returns insert_hbnd3 here
-      virtual hbndseg3_GEO  * insert_hbnd3 (hface3_GEO *, int, Gitter::hbndseg_STI::bnd_t, MacroGhostInfoTetra* );
-      virtual hbndseg4_GEO  * insert_hbnd4 (hface4_GEO *, int, Gitter::hbndseg_STI::bnd_t);
-      virtual hbndseg4_GEO  * insert_hbnd4 (hface4_GEO *, int, Gitter::hbndseg_STI::bnd_t, MacroGhostInfoHexa* );
-      virtual tetra_GEO     * insert_tetra (hface3_GEO *(&)[4], int (&)[4], SimplexTypeFlag );
-      virtual periodic3_GEO * insert_periodic3 (hface3_GEO *(&)[2], int (&)[2], const Gitter:: hbndseg_STI::bnd_t (&)[2]);
+      virtual hbndseg3_GEO  * insert_hbnd3 (hface3_GEO *, const IsRearFlag&, Gitter::hbndseg_STI::bnd_t, MacroGhostInfoTetra* );
+      virtual hbndseg4_GEO  * insert_hbnd4 (hface4_GEO *, const IsRearFlag&, Gitter::hbndseg_STI::bnd_t);
+      virtual hbndseg4_GEO  * insert_hbnd4 (hface4_GEO *, const IsRearFlag&, Gitter::hbndseg_STI::bnd_t, MacroGhostInfoHexa* );
+      virtual tetra_GEO     * insert_tetra (hface3_GEO *(&)[4], const IsRearFlag&, SimplexTypeFlag );
+      virtual periodic3_GEO * insert_periodic3 (hface3_GEO *(&)[2], const IsRearFlag&, const Gitter:: hbndseg_STI::bnd_t (&)[2]);
 
-      virtual periodic4_GEO * insert_periodic4 (hface4_GEO *(&)[2], int (&)[2], const Gitter:: hbndseg_STI::bnd_t (&)[2]);
-      virtual hexa_GEO      * insert_hexa (hface4_GEO *(&)[6], int (&)[6]);
+      virtual periodic4_GEO * insert_periodic4 (hface4_GEO *(&)[2], const IsRearFlag&, const Gitter:: hbndseg_STI::bnd_t (&)[2]);
+      virtual hexa_GEO      * insert_hexa (hface4_GEO *(&)[6], const IsRearFlag&);
     public :
       // Gitter is a reference to our grid
       // constructors creating macro grids from streams
@@ -398,7 +395,7 @@ namespace ALUGrid
   inline int GitterBasis::Objects::VertexEmpty::ident () const
   {
     std::cerr << "ERROR (FATAL): vertex::ident() may only be called for macro vertices." << std::endl;
-    abort();
+    std::abort();
     return -1;
   }
 
@@ -427,8 +424,8 @@ namespace ALUGrid
     }
   }
 
-  inline GitterBasis::Objects::Hface3Empty::Hface3Empty (myhedge1_t *e0, int s0,
-    myhedge1_t *e1, int s1, myhedge1_t *e2, int s2) : Gitter::Geometric::hface3_GEO (e0, s0, e1, s1, e2, s2) {
+  inline GitterBasis::Objects::Hface3Empty::Hface3Empty (myhedge1_t *e0,
+    myhedge1_t *e1, myhedge1_t *e2) : Gitter::Geometric::hface3_GEO (e0, e1, e2) {
     return;
   }
 
@@ -441,9 +438,9 @@ namespace ALUGrid
       innerVertex()->project(pv);
   }
 
-  inline GitterBasis::Objects::Hface4Empty::Hface4Empty (myhedge1_t *e0, int s0,
-    myhedge1_t *e1, int s1, myhedge1_t *e2, int s2, myhedge1_t *e3, int s3)
-    : Gitter::Geometric::hface4_GEO (e0, s0, e1, s1, e2, s2, e3, s3) {
+  inline GitterBasis::Objects::Hface4Empty::Hface4Empty (myhedge1_t *e0,
+    myhedge1_t *e1, myhedge1_t *e2, myhedge1_t *e3)
+    : Gitter::Geometric::hface4_GEO (e0, e1, e2, e3) {
     return;
   }
 
@@ -455,8 +452,8 @@ namespace ALUGrid
   }
 
   inline GitterBasis::Objects::Hbnd3Default::
-  Hbnd3Default (myhface3_t * f, int i )
-   : Gitter::Geometric::hbndseg3_GEO (f, i)
+  Hbnd3Default (myhface3_t * f, bool isRear )
+   : Gitter::Geometric::hbndseg3_GEO (f, isRear)
   {
     return;
   }
@@ -473,8 +470,8 @@ namespace ALUGrid
     return leaf();
   }
 
-  inline GitterBasis::Objects::Hbnd4Default::Hbnd4Default (myhface4_t * f, int i) :
-    Gitter::Geometric::hbndseg4_GEO (f, i)
+  inline GitterBasis::Objects::Hbnd4Default::Hbnd4Default (myhface4_t * f, bool isRear) :
+    Gitter::Geometric::hbndseg4_GEO (f, isRear)
   {
     return;
   }
@@ -492,8 +489,8 @@ namespace ALUGrid
   }
 
   inline GitterBasis::Objects::TetraEmpty::
-  TetraEmpty (myhface3_t * f0, int t0, myhface3_t * f1, int t1,
-              myhface3_t * f2, int t2, myhface3_t * f3, int t3) :
+  TetraEmpty (myhface3_t * f0, bool t0, myhface3_t * f1, bool t1,
+              myhface3_t * f2, bool t2, myhface3_t * f3, bool t3) :
     Gitter::Geometric::Tetra (f0, t0, f1, t1, f2, t2, f3, t3)
   {
     attachleafs();
@@ -521,21 +518,21 @@ namespace ALUGrid
     return ((this->isGhost()) ? 0 : myGrid()->postRefinement(*this));
   }
 
-  inline GitterBasis::Objects::Periodic3Empty::Periodic3Empty (myhface3_t * f0, int t0, myhface3_t * f1, int t1)
+  inline GitterBasis::Objects::Periodic3Empty::Periodic3Empty (myhface3_t * f0, bool t0, myhface3_t * f1, bool t1)
     : Gitter::Geometric::Periodic3 (f0, t0, f1, t1) {
     return;
   }
 
-  inline GitterBasis::Objects::Periodic4Empty::Periodic4Empty (myhface4_t * f0, int t0, myhface4_t * f1, int t1)
+  inline GitterBasis::Objects::Periodic4Empty::Periodic4Empty (myhface4_t * f0, bool t0, myhface4_t * f1, bool t1)
     : Gitter::Geometric::Periodic4 (f0, t0, f1, t1) {
     return;
   }
 
   // Neu: burriad 29.4.05
   inline GitterBasis::Objects::HexaEmpty::
-  HexaEmpty (myhface4_t * f0, int t0, myhface4_t * f1, int t1,
-             myhface4_t * f2, int t2, myhface4_t * f3, int t3,
-             myhface4_t * f4, int t4, myhface4_t * f5, int t5) :
+  HexaEmpty (myhface4_t * f0, bool t0, myhface4_t * f1, bool t1,
+             myhface4_t * f2, bool t2, myhface4_t * f3, bool t3,
+             myhface4_t * f4, bool t4, myhface4_t * f5, bool t5) :
     Gitter::Geometric::hexa_GEO(f0, t0, f1, t1, f2, t2, f3, t3, f4, t4, f5, t5)
   {
     attachleafs();

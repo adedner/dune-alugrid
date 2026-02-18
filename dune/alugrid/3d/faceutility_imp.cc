@@ -8,17 +8,17 @@ namespace Dune
   template< int dim, int dimworld, ALU3dGridElementType type, class Comm >
   inline ALU3dGridFaceInfo< dim, dimworld, type, Comm >::
   ALU3dGridFaceInfo( const bool levelIntersection ) :
-    face_(0),
-    innerElement_(0),
-    outerElement_(0),
+    face_(nullptr),
+    innerElement_(nullptr),
+    outerElement_(nullptr),
+    ghostElem_(nullptr),
     innerFaceNumber_(-1),
     outerFaceNumber_(-1),
-    innerTwist_(-665),
-    outerTwist_(-665),
     segmentId_( -1 ),
     bndId_( -1 ),
-    bndType_( noBoundary ),
     conformanceState_(UNDEFINED),
+    bndType_( noBoundary ),
+    isInnerRear_(false),
     conformingRefinement_( false ),
     ghostCellsEnabled_( false ),
     levelIntersection_( levelIntersection )
@@ -42,20 +42,22 @@ namespace Dune
   ALU3dGridFaceInfo< dim, dimworld, type, Comm >::
   updateFaceInfo(const GEOFaceType& face,
                  int innerLevel,
-                 int innerTwist)
+                 bool isInnerRear)
   {
     face_ = &face;
 
-    innerElement_ = 0;
-    outerElement_ = 0;
+    innerElement_ = nullptr;
+    outerElement_ = nullptr;
+    ghostElem_    = nullptr;
     innerFaceNumber_ = -1;
     outerFaceNumber_ = -1;
     bndType_ = noBoundary;
     segmentId_ = -1;
     bndId_ = 0; // inner face
 
-    // points face from inner element away?
-    if (innerTwist < 0)
+    isInnerRear_ = isInnerRear;
+    // points face from inner element away
+    if (isInnerRear)
     {
       innerElement_    = face.nb.rear().first;
       innerFaceNumber_ = face.nb.rear().second;
@@ -102,35 +104,60 @@ namespace Dune
         GhostPairType p  = bnd->getGhost();
 
         // get face number
-        innerFaceNumber_ = p.second;
-
         // this doesn't count as outer boundary
         const GEOElementType* ghost = static_cast<const GEOElementType*> (p.first);
+        innerFaceNumber_ = p.second;
+#ifndef NDEBUG
         alugrid_assert (ghost);
-
-        innerTwist_ = ghost->twist(innerFaceNumber_);
+        alugrid_assert(isInnerRear_ == ghost->isRear(innerFaceNumber_));
+#endif
+        ghostElem_ = ghost;
       }
       else
       {
-        innerTwist_ = innerFace().twist(innerALUFaceIndex());
+        alugrid_assert(isInnerRear_ == innerFace().isRear(innerALUFaceIndex()));
       }
     }
     else
     {
-      // set inner twist
-      alugrid_assert (innerTwist == innerEntity().twist(innerFaceNumber_));
-      innerTwist_ = innerTwist;
+      // in REFINED_OUTER status, subface 3 of the outside may have rear
+      // pointing in different direction
+      alugrid_assert (isInnerRear_ == innerEntity().isRear(innerFaceNumber_) || innerLevel < outerEntity().level());
     }
 
     //in the case of a levelIntersectionIterator and conforming elements
     //we assume the macro grid view. So we go up to level 0
-    //after that we have to get new twist and facenumbers
+    //after that we have to get new isRear and facenumbers
     if(levelIntersection_ && conformingRefinement_ && ! (innerElement_->isboundary() ) )
     {
       const GEOElementType * inner = static_cast<const GEOElementType *> (innerElement_);
-      while( inner -> up () ) inner = static_cast<const GEOElementType *> ( inner ->up() );
+      //we come from a macro element, which may have an intersection with an element
+      //of level one. So we have at most to go up one level
+      //TODO: THis is not true in Longest Edge bisection
+      while( inner -> up ())
+      {
+        bool faceNumberChange = false;
+        if( inner->nChild() == 1)
+        {
+          faceNumberChange = true;
+        }
+        inner = static_cast<const GEOElementType *> ( inner ->up() );
+        //if the rule is one of e02, e13, e03 a face number changes
+        if( faceNumberChange )
+        {
+          if( inner->getrule() == ALU3DSPACE RefinementRules::TetraRule::e03 || inner->getrule() == ALU3DSPACE RefinementRules::TetraRule::e02 )
+          {
+            innerFaceNumber_ = 3;
+          }
+          if( inner->getrule() == ALU3DSPACE RefinementRules::TetraRule::e13 )
+          {
+            innerFaceNumber_ = 2;
+          }
+        }
+      }
+      alugrid_assert( inner->level() == 0 );
       innerElement_ = static_cast<const HasFaceType *> (inner);
-      innerTwist_ = innerEntity().twist(innerFaceNumber_);
+      alugrid_assert( isInnerRear_ == innerEntity().isRear(innerFaceNumber_) );
     }
 
     if( outerElement_->isboundary() )
@@ -177,8 +204,8 @@ namespace Dune
           alugrid_assert ( dynamic_cast< const BNDFaceType * >( outerElement_ ) );
           bnd = static_cast< const BNDFaceType * >( outerElement_ );
         }
-        else
-          outerTwist_ = outerEntity().twist( outerFaceNumber_ );
+        //else
+        //  alugrid_assert(isInnerRear_ == !(outerEntity().isRear( outerFaceNumber_ )));
       }
       if ( bnd ) // the boundary case
       {
@@ -201,7 +228,7 @@ namespace Dune
           bndType_ = outerGhostBoundary ;
 
           if(conformingRefinement_)
-            outerTwist_ = boundaryFace().twist(outerALUFaceIndex());
+            alugrid_assert(isInnerRear_ == !(boundaryFace().isRear(outerALUFaceIndex())));
 
           // access ghost only when ghost cells are enabled
           if( ghostCellsEnabled_ )
@@ -210,15 +237,17 @@ namespace Dune
             GhostPairType p  = bnd->getGhost();
             outerFaceNumber_ = p.second;
 
+#ifndef NDEBUG
             const GEOElementType* ghost = static_cast<const GEOElementType*> (p.first);
             alugrid_assert ( ghost );
-            outerTwist_ = ghost->twist(outerFaceNumber_);
+            alugrid_assert(isInnerRear_ == !(ghost->isRear(outerFaceNumber_)));
+#endif
           }
         }
         else // the normal boundary case
         {
-          // get outer twist
-          outerTwist_ = boundaryFace().twist(outerALUFaceIndex());
+          // get outer isRear
+          alugrid_assert(isInnerRear_ == !(boundaryFace().isRear(outerALUFaceIndex())));
           // compute segment index when needed
           segmentId_ = boundaryFace().segmentId();
           bndId_ = boundaryFace().bndtype();
@@ -227,27 +256,47 @@ namespace Dune
     } // if outerElement_->isboundary
     else
     {
-      // get outer twist
-      outerTwist_ = outerEntity().twist(outerALUFaceIndex());
+      // in REFINED_INNER conformance status, rear may point in different directions
+      alugrid_assert(isInnerRear_ == !(outerEntity().isRear(outerALUFaceIndex())) || innerLevel > outerEntity().level() );
     }
 
     //in the case of a levelIntersectionIterator and conforming elements
     //we assume the macro grid view. So we go up to level 0
-    //after that we have to get new twist and facenumbers
+    //after that we have to get new facenumbers
     if(levelIntersection_ && conformingRefinement_ && !  (outerElement_->isboundary() ) )
     {
       const GEOElementType * outer = static_cast<const GEOElementType *> (outerElement_);
-      while( outer -> up () ) outer = static_cast<const GEOElementType *> ( outer ->up() );
+      //we come from a macro element, which may have an intersection with an element
+      //of level one. So we have at most to go up one level
+      //TODO: THis is not true in Longest Edge Bisection
+      while( outer -> up ())
+      {
+        bool faceNumberChange = false;
+        if( outer->nChild() == 1)
+        {
+          faceNumberChange = true;
+        }
+        outer = static_cast<const GEOElementType *> ( outer ->up() );
+        //if the rule is one of e02, e13, e03 a face number changes
+        if( faceNumberChange )
+        {
+          if( outer->getrule() == ALU3DSPACE RefinementRules::TetraRule::e03 || outer->getrule() == ALU3DSPACE RefinementRules::TetraRule::e02 )
+          {
+            outerFaceNumber_ = 3;
+          }
+          if( outer->getrule() == ALU3DSPACE RefinementRules::TetraRule::e13 )
+          {
+            outerFaceNumber_ = 2;
+          }
+        }
+      }
+      alugrid_assert( outer->level() == 0 );
       outerElement_ = static_cast<const HasFaceType *> (outer);
-      outerTwist_ = outerEntity().twist(outerFaceNumber_);
+      alugrid_assert( isInnerRear_ == !(outerEntity().isRear(outerFaceNumber_)) );
     }
 
     // make sure we got boundary id correctly
     alugrid_assert ( bndType_ == periodicBoundary || bndType_ == domainBoundary ? bndId_ > 0 : bndId_ == 0 );
-
-    //make sure twists are set
-    alugrid_assert( innerTwist_ != -665);
-    alugrid_assert( outerTwist_ != -665);
 
     // set conformance information
     conformanceState_ = getConformanceState(innerLevel);
@@ -257,9 +306,9 @@ namespace Dune
   template< int dim, int dimworld, ALU3dGridElementType type, class Comm >
   inline ALU3dGridFaceInfo< dim, dimworld, type, Comm >::
   ALU3dGridFaceInfo(const GEOFaceType& face,
-                    int innerTwist)
+                    bool isInnerRear)
   {
-    updateFaceInfo(face,innerTwist);
+    updateFaceInfo(face,isInnerRear);
   }
 
   template< int dim, int dimworld, ALU3dGridElementType type, class Comm >
@@ -273,8 +322,7 @@ namespace Dune
     outerElement_(orig.outerElement_),
     innerFaceNumber_(orig.innerFaceNumber_),
     outerFaceNumber_(orig.outerFaceNumber_),
-    innerTwist_(orig.innerTwist_),
-    outerTwist_(orig.outerTwist_),
+    isInnerRear_(orig.isInnerRear_),
     segmentId_( orig.segmentId_ ),
     bndId_( orig.bndId_ ),
     bndType_( orig.bndType_ ),
@@ -378,52 +426,30 @@ namespace Dune
   }
 
   template< int dim, int dimworld, ALU3dGridElementType type, class Comm >
-  inline int ALU3dGridFaceInfo< dim, dimworld, type, Comm >::innerTwist() const
+  inline bool ALU3dGridFaceInfo< dim, dimworld, type, Comm >::isInnerRear() const
   {
     // don't check ghost boundaries here
-    alugrid_assert ( ( ! innerBoundary() ) ?
-        innerEntity().twist(innerALUFaceIndex()) == innerTwist_ : true );
-    return innerTwist_;
+    alugrid_assert ( ( ! innerBoundary()  && !(conformanceState() == REFINED_OUTER)) ?
+        innerEntity().isRear(innerALUFaceIndex()) == isInnerRear_ : true );
+    return isInnerRear_;
   }
 
   template< int dim, int dimworld, ALU3dGridElementType type, class Comm >
   inline int ALU3dGridFaceInfo< dim, dimworld, type, Comm >::duneTwist(const int faceIdx, const int aluTwist) const
   {
-    typedef ElementTopologyMapping<type> ElementTopo;
-    typedef FaceTopologyMapping<type> FaceTopo;
-
-    const int mappedZero =
-      FaceTopo::twist(ElementTopo::dune2aluFaceVertex( faceIdx, 0), aluTwist);
-
-    const int twist =
-      (ElementTopo::faceOrientation( faceIdx ) * sign(aluTwist) < 0 ?
-       mappedZero : -mappedZero-1);
-
-    // see topology.* files for aluTwistMap
-    if constexpr ( dim == 2 )
-    {
-      // in 2d twists are either 0 or 1, but because
-      // of the underlying 3d alu grid they could be different
-      // therefore we adjust to the right range
-      const int duneTwst = FaceTopo :: aluTwistMap( twist );
-      return (duneTwst == 0) ? 0 : 1;
-    }
-    else
-    {
-      return FaceTopo :: aluTwistMap( twist );
-    }
+    return 0;
   }
 
   template< int dim, int dimworld, ALU3dGridElementType type, class Comm >
-  inline int ALU3dGridFaceInfo< dim, dimworld, type, Comm >::outerTwist() const
+  inline bool ALU3dGridFaceInfo< dim, dimworld, type, Comm >::isOuterRear() const
   {
     // don't check ghost boundaries here
     //alugrid_assert ( (outerBoundary_) ?
-    //          (outerTwist_ == boundaryFace().twist(0)) :
+    //          (isOuterFront_ == boundaryFace().isRear(0)) :
     //          (! ghostBoundary_) ?
-    //          (outerTwist_ == outerEntity().twist(outerALUFaceIndex())) : true
+    //          (isOuterFront_ == outerEntity().isRear(outerALUFaceIndex())) : true
     //      );
-    return outerTwist_;
+    return !(isInnerRear_);
   }
 
   template< int dim, int dimworld, ALU3dGridElementType type, class Comm >
@@ -461,6 +487,7 @@ namespace Dune
       else
         levelDifference = innerLevel - boundaryFace().level();
 
+      alugrid_assert(std::abs(levelDifference) <= 1);
       if (levelDifference < 0) {
         result = REFINED_OUTER;
       }
@@ -553,9 +580,9 @@ namespace Dune
       // calculate the normal
       const GEOFaceType & face = this->connector_.face();
 
-      geo.buildGeom( face.myvertex(FaceTopo::dune2aluVertex(0))->Point() ,
-                     face.myvertex(FaceTopo::dune2aluVertex(1))->Point() ,
-                     face.myvertex(FaceTopo::dune2aluVertex(2))->Point() );
+      geo.buildGeom( face.myvertex(0)->Point() ,
+                     face.myvertex(1)->Point() ,
+                     face.myvertex(2)->Point() );
 
       this->generatedGlobal_ = true ;
     }
@@ -566,26 +593,31 @@ namespace Dune
   ALU3dGridGeometricFaceInfoTetra< dim, dimworld, Comm >::
   outerNormal(const FieldVector<alu3d_ctype, 2>& local) const
   {
-    // if geomInfo was not reseted then normal is still correct
+    // if geomInfo was not reset then normal is still correct
     if(!normalUp2Date_)
     {
       // calculate the normal
-      const GEOFaceType & face = this->connector_.face();
-      const alu3d_ctype (&_p0)[3] = face.myvertex(0)->Point();
-      const alu3d_ctype (&_p1)[3] = face.myvertex(1)->Point();
-      const alu3d_ctype (&_p2)[3] = face.myvertex(2)->Point();
+      const GEOFaceType& face    = this->connector_.face();
+      const alu3d_ctype (&p0)[3] = face.myvertex(0)->Point();
+      const alu3d_ctype (&p1)[3] = face.myvertex(1)->Point();
+      const alu3d_ctype (&p2)[3] = face.myvertex(2)->Point();
 
-      // change sign if face normal points into inner element
-      // factor is 1.0 to get integration outer normal and not volume outer normal
-      const double factor = (this->connector_.innerTwist() < 0) ? 1.0 : -1.0;
+      // cross product of two vectors
+      outerNormal_[0] = ((p1[1] - p0[1]) * (p2[2] - p0[2]) - (p2[1] - p0[1]) * (p1[2] - p0[2]));
+      outerNormal_[1] = ((p1[2] - p0[2]) * (p2[0] - p0[0]) - (p2[2] - p0[2]) * (p1[0] - p0[0]));
+      outerNormal_[2] = ((p1[0] - p0[0]) * (p2[1] - p0[1]) - (p2[0] - p0[0]) * (p1[1] - p0[1]));
 
-      // see mapp_tetra_3d.h for this piece of code
-      outerNormal_[0] = factor * ((_p1[1]-_p0[1]) *(_p2[2]-_p1[2]) - (_p2[1]-_p1[1]) *(_p1[2]-_p0[2]));
-      outerNormal_[1] = factor * ((_p1[2]-_p0[2]) *(_p2[0]-_p1[0]) - (_p2[2]-_p1[2]) *(_p1[0]-_p0[0]));
-      outerNormal_[2] = factor * ((_p1[0]-_p0[0]) *(_p2[1]-_p1[1]) - (_p2[0]-_p1[0]) *(_p1[1]-_p0[1]));
+      const alu3d_ctype (&p3)[3] = connector_.outerPoint();
+      const double det = outerNormal_[0] * (p3[0] - p0[0]) + outerNormal_[1] * (p3[1] - p0[1]) + outerNormal_[2] * (p3[2] - p0[2]);
 
+      if(det > 0)
+      {
+        outerNormal_[0] = -outerNormal_[0];
+        outerNormal_[1] = -outerNormal_[1];
+        outerNormal_[2] = -outerNormal_[2];
+      }
       normalUp2Date_ = true;
-    } // end if mapp ...
+    } // end if normalUp2Date_
 
     return outerNormal_;
   }
@@ -626,10 +658,10 @@ namespace Dune
       // calculate the normal
       const GEOFaceType & face = this->connector_.face();
 
-      geo.buildGeom( face.myvertex(FaceTopo::dune2aluVertex(0))->Point() ,
-                     face.myvertex(FaceTopo::dune2aluVertex(1))->Point() ,
-                     face.myvertex(FaceTopo::dune2aluVertex(2))->Point() ,
-                     face.myvertex(FaceTopo::dune2aluVertex(3))->Point() );
+      geo.buildGeom( face.myvertex(0)->Point() ,
+                     face.myvertex(1)->Point() ,
+                     face.myvertex(2)->Point() ,
+                     face.myvertex(3)->Point() );
       this->generatedGlobal_ = true ;
     }
   }
@@ -649,18 +681,34 @@ namespace Dune
       const GEOFaceType & face = connector_.face();
       // update mapping to actual face
       mappingGlobal_.buildMapping(
-        face.myvertex( FaceTopo::dune2aluVertex(0) )->Point(),
-        face.myvertex( FaceTopo::dune2aluVertex(1) )->Point(),
-        face.myvertex( FaceTopo::dune2aluVertex(2) )->Point(),
-        face.myvertex( FaceTopo::dune2aluVertex(3) )->Point()
+        face.myvertex( 0 )->Point(),
+        face.myvertex( 1 )->Point(),
+        face.myvertex( 2 )->Point(),
+        face.myvertex( 3 )->Point()
         );
       mappingGlobalUp2Date_ = true;
+      mappingGlobal_.normal(local, outerNormal_);
+
+      const alu3d_ctype (&p)[3]  = this->connector_.outerPoint();
+      const alu3d_ctype (&p0)[3] = face.myvertex( 0 )->Point();
+      double det = outerNormal_[0] * (p[0] - p0[0]) + outerNormal_[1] * (p[1] - p0[1]) + outerNormal_[2] * (p[2] - p0[2]);
+
+      if(det > 0)
+      {
+        outerNormal_[0] = -outerNormal_[0];
+        outerNormal_[1] = -outerNormal_[1];
+        outerNormal_[2] = -outerNormal_[2];
+        negativeNormal_ = true;
+      }
+      else
+        negativeNormal_ = false;
+      return outerNormal_;
     }
 
     // calculate the normal
     // has to be calculated every time normal called, because
     // depends on local
-    if (connector_.innerTwist() < 0)
+    if (negativeNormal_)
       mappingGlobal_.negativeNormal(local,outerNormal_);
     else
       mappingGlobal_.normal(local,outerNormal_);
@@ -709,19 +757,9 @@ namespace Dune
   template< int dim, int dimworld, ALU3dGridElementType type, class Comm >
   inline int ALU3dGridGeometricFaceInfoBase< dim, dimworld, type, Comm >::
   globalVertexIndex(const int duneFaceIndex,
-                    const int aluFaceTwist,
                     const int duneFaceVertexIndex) const
   {
-    const int localALUIndex =
-      FaceTopo::dune2aluVertex(duneFaceVertexIndex,
-                               aluFaceTwist);
-
-    // get local ALU vertex number on the element's face
-    const int localDuneIndex = ElementTopo::
-        alu2duneFaceVertex(ElementTopo::dune2aluFace(duneFaceIndex),
-                           localALUIndex);
-
-    return getReferenceElement().subEntity(duneFaceIndex, 1, localDuneIndex, 3);
+    return getReferenceElement().subEntity(duneFaceIndex, 1, duneFaceVertexIndex, 3);
   }
 
 
@@ -733,18 +771,14 @@ namespace Dune
     // this is a dune face index
     const int faceIndex =
       (side == INNER ?
-       ElementTopo::alu2duneFace(connector_.innerALUFaceIndex()) :
-       ElementTopo::alu2duneFace(connector_.outerALUFaceIndex()));
-    const int faceTwist =
-      (side == INNER ?
-       connector_.innerTwist() :
-       connector_.outerTwist());
+       connector_.innerALUFaceIndex() :
+       connector_.outerALUFaceIndex());
 
     const ReferenceElementType& refElem = getReferenceElement();
 
     for (int i = 0; i < numVerticesPerFace; ++i)
     {
-      int duneVertexIndex = globalVertexIndex(faceIndex, faceTwist, i);
+      int duneVertexIndex = globalVertexIndex(faceIndex,  i);
       result[i] = refElem.position(duneVertexIndex, 3);
     }
   }
@@ -823,14 +857,14 @@ namespace Dune
   ALU3dGridGeometricFaceInfoTetra< 2, dimworld, Comm >::
   buildGlobalGeom(GeometryImp& geo) const
   {
-        //could be wrong in twist sense
+        //could be wrong in isRear sense
     if (! this->generatedGlobal_)
     {
       // calculate the normal
       const GEOFaceType & face = this->connector_.face();
 
-      geo.buildGeom( face.myvertex(FaceTopo::dune2aluVertex(1))->Point() ,
-                     face.myvertex(FaceTopo::dune2aluVertex(2))->Point() );
+      geo.buildGeom( face.myvertex(1)->Point() ,
+                     face.myvertex(2)->Point() );
 
       this->generatedGlobal_ = true ;
     }
@@ -845,23 +879,27 @@ namespace Dune
     if(!normalUp2Date_)
     {
       // calculate the normal
-      const GEOFaceType & face = this->connector_.face();
-      const alu3d_ctype (&_p1)[3] = face.myvertex(1)->Point();
-      const alu3d_ctype (&_p2)[3] = face.myvertex(2)->Point();
+      const GEOFaceType& face   = this->connector_.face();
+      const alu3d_ctype(&p1)[3] = face.myvertex(1)->Point();
+      const alu3d_ctype(&p2)[3] = face.myvertex(2)->Point();
 
-      // change sign if face normal points into inner element
-      // factor is 1.0 to get integration outer normal and not volume outer normal
-      const double factor = (this->connector_.innerTwist() < 0) ? 1.0 : -1.0;
+      const alu3d_ctype(&p3)[3] = this->connector_.outerPoint();
 
-
-      if(dimworld == 2)
-      {
-        // we want the outer normal orhtogonal to the intersection and  with length of the intersection
-        outerNormal_[0] = factor * (_p2[1]-_p1[1]);
-        outerNormal_[1] = factor * (_p1[0]-_p2[0]);
-      }
+      alugrid_assert(dimworld == 2);
       //implemented in iterator_imp.cc
       //else if(dimworld == 3)
+
+      // we want the outer normal orthogonal to the intersection and  with length of the intersection
+      outerNormal_[0] = (p2[1] - p1[1]);
+      outerNormal_[1] = (p1[0] - p2[0]);
+
+      double det = outerNormal_[0] * (p3[0] - p1[0]) + outerNormal_[1] * (p3[1] - p1[1]);
+
+      if(det > 0)
+      {
+        outerNormal_[0] = -outerNormal_[0];
+        outerNormal_[1] = -outerNormal_[1];
+      }
 
       normalUp2Date_ = true;
     } // end if mapp ...
@@ -898,14 +936,14 @@ namespace Dune
   ALU3dGridGeometricFaceInfoHexa< 2, dimworld, Comm >::
   buildGlobalGeom(GeometryImp& geo) const
   {
-    //could be wrong in twist sense
+    //could be wrong in isRear sense
     if (! this->generatedGlobal_)
     {
       // calculate the normal
       const GEOFaceType & face = this->connector_.face();
 
-      geo.buildGeom( face.myvertex(FaceTopo::dune2aluVertex(0))->Point() ,
-                     face.myvertex(FaceTopo::dune2aluVertex(1))->Point() );
+      geo.buildGeom( face.myvertex(0)->Point() ,
+                     face.myvertex(1)->Point() );
       this->generatedGlobal_ = true ;
     }
   }
@@ -920,22 +958,25 @@ namespace Dune
     {
       // calculate the normal
       const GEOFaceType & face = this->connector_.face();
-      const alu3d_ctype (&_p0)[3] = face.myvertex(0)->Point();
-      const alu3d_ctype (&_p3)[3] = face.myvertex(3)->Point();
+      const alu3d_ctype (&p0)[3] = face.myvertex(0)->Point();
+      const alu3d_ctype (&p1)[3] = face.myvertex(1)->Point();
 
-      // change sign if face normal points into inner element
-      // factor is 1.0 to get integration outer normal and not volume outer normal
-      const double factor = (this->connector_.innerTwist() < 0) ? -1.0 : 1.0;
-
-      if(dimworld == 2)
-      {
-        // we want the length of the intersection and orthogonal to it
-        outerNormal_[0] = factor * (_p0[1] - _p3[1]);
-        outerNormal_[1] = factor * (_p3[0] - _p0[0]);
-      }
+      const alu3d_ctype (&p3)[3] = this->connector_.outerPoint();
+      alugrid_assert(dimworld == 2);
       //implemented in iterator_imp.cc
       //else if(dimworld == 3)
 
+      // we want the length of the intersection and orthogonal to it
+      outerNormal_[0] =  (p0[1] - p1[1]);
+      outerNormal_[1] =  (p1[0] - p0[0]);
+
+      double det = outerNormal_[0] * (p3[0] - p1[0]) + outerNormal_[1] * (p3[1] - p1[1]);
+
+      if(det > 0)
+      {
+        outerNormal_[0] = -outerNormal_[0] ;
+        outerNormal_[1] = -outerNormal_[1];
+      }
       normalUp2Date_ = true;
     } // end if mapp ...
 
@@ -982,29 +1023,18 @@ namespace Dune
   template<  int dimworld, ALU3dGridElementType type, class Comm >
   inline int ALU3dGridGeometricFaceInfoBase< 2, dimworld, type, Comm >::
   globalVertexIndex(const int duneFaceIndex,
-                    const int aluFaceTwist,
                     const int duneFaceVertexIndex) const
   {
     //we want vertices 1,2 of the real 3d DUNE face for tetras and 0,1 for hexas
-    const  int localALUIndex =
-      FaceTopo::dune2aluVertex(type == tetra ? duneFaceVertexIndex + 1 : duneFaceVertexIndex,
-                               aluFaceTwist);
-
-    // get local DUNE vertex number on the element's face - for tetra map  1,2 of real 3d face back to 0,1 by subtracting 1
-    const int localDuneIndex = (type == tetra) ?
-                             ElementTopo::alu2duneFaceVertex(ElementTopo::dune2aluFace(duneFaceIndex), localALUIndex) - 1
-                             :
-                             ElementTopo::alu2duneFaceVertex(ElementTopo::dune2aluFace(duneFaceIndex), localALUIndex)
-                             ;
 
    /* std::cout << "duneFaceIndex: " << duneFaceIndex << std::endl;
-    std::cout << "aluFaceTwist: " << aluFaceTwist << std::endl;
+    std::cout << "aluFaceisRear: " << aluFaceTwist << std::endl;
     std::cout << "duneFaceVertexIndex: " << duneFaceVertexIndex << std::endl;
     std::cout << "localALUIndex: " << localALUIndex << std::endl;
     std::cout << "localDuneIndex: " << localDuneIndex << std::endl;
     std ::cout << "ReferenceElementindex: " << getReferenceElement().subEntity(duneFaceIndex, 1, localDuneIndex, 2) << std::endl << std::endl; */
-    assert( localDuneIndex == 0 || localDuneIndex == 1 );
-    return getReferenceElement().subEntity(duneFaceIndex, 1, localDuneIndex, 2);
+    assert( duneFaceVertexIndex == 0 || duneFaceVertexIndex == 1 );
+    return getReferenceElement().subEntity(duneFaceIndex, 1, duneFaceVertexIndex, 2);
   }
 
 
@@ -1016,18 +1046,14 @@ namespace Dune
     // this is a dune face index
     const int faceIndex =
       (side == INNER ?
-       ElementTopo::alu2duneFace(connector_.innerALUFaceIndex()) :
-       ElementTopo::alu2duneFace(connector_.outerALUFaceIndex()));
-    const int faceTwist =
-      (side == INNER ?
-       connector_.innerTwist() :
-       connector_.outerTwist());
+       connector_.innerALUFaceIndex() :
+       connector_.outerALUFaceIndex());
 
     const ReferenceElementType& refElem = getReferenceElement();
 
     for (int i = 0; i < numVerticesPerFace; ++i)
     {
-      int duneVertexIndex = globalVertexIndex(faceIndex, faceTwist, i);
+      int duneVertexIndex = globalVertexIndex(faceIndex, i);
       result[i] = refElem.position(duneVertexIndex, 2);
     }
   }
